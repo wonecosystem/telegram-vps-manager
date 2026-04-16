@@ -78,50 +78,71 @@ Desenvolvido com foco em **simplicidade, segurança e praticidade**, ideal para 
 
 ### Pré-requisitos
 - Servidor Linux (Ubuntu 22.04+ recomendado)
-- Python 3.8+
-- Token de bot Telegram (obtenha com [@BotFather](https://t.me/BotFather))
+- Acesso root (via SSH ou painel da VPS)
+- Token de bot Telegram (veja como obter abaixo)
 
-### Clonar via SSH
+---
+
+### Passo 1 — Criar o bot no Telegram
+
+1. Abra o Telegram e pesquise por **@BotFather**
+2. Envie o comando `/newbot`
+3. Escolha um nome para o bot (ex: `Meu Servidor Bot`)
+4. Escolha um username terminando em `bot` (ex: `meuservidor_bot`)
+5. O BotFather vai te enviar um **TOKEN** — copie e guarde, você vai precisar
+
+> Exemplo de token: `7861641200:AAERSgi8WxuiRv1fDwtWsi-Ejvzw47FtsFA`
+
+---
+
+### Passo 2 — Acessar o servidor via SSH
+
+Se você usa **Windows**, abra o **PowerShell** ou **CMD** e conecte:
 
 ```bash
-git clone git@github.com:seu-usuario/telegram-vps-manager.git
+ssh root@IP_DO_SEU_SERVIDOR
+```
+
+> Substitua `IP_DO_SEU_SERVIDOR` pelo IP da sua VPS (ex: `ssh root@123.456.789.0`)
+
+---
+
+### Passo 3 — Instalar o bot (tudo em um comando)
+
+Cole os comandos abaixo no terminal do servidor:
+
+```bash
+apt update && apt install -y git
+git clone https://github.com/wonecosystem/telegram-vps-manager.git
 cd telegram-vps-manager
+sudo bash install.sh
 ```
 
-### Configurar
+O instalador vai perguntar:
 
-Copie o arquivo de exemplo e edite com seu token:
-
-```bash
-cp config.json.example config.json
-nano config.json
+```
+🤖 Cole o TOKEN do bot Telegram (do @BotFather): [cole aqui o token]
+📊 Limite de alerta CPU em % (padrão: 80):        [Enter para 80%]
+💿 Limite de alerta Disco em % (padrão: 80):      [Enter para 80%]
 ```
 
-```json
-{
-  "token": "SEU_TOKEN_AQUI",
-  "cpu_alert_threshold": 80,
-  "disk_alert_threshold": 80,
-  "monitor_interval": 300
-}
+Ao final você verá:
+```
+✔ Instalação concluída com sucesso!
 ```
 
-> O `chat_id` é registrado automaticamente no primeiro `/start`.
-> O `install.sh` solicita o token interativamente — não é necessário editar o arquivo manualmente.
+---
 
-### Instalar dependências e rodar
+### Passo 4 — Ativar o bot no Telegram
 
-```bash
-# Criar ambiente virtual
-python3 -m venv venv
-source venv/bin/activate
+1. Abra o Telegram
+2. Pesquise pelo username do bot que você criou (ex: `@meuservidor_bot`)
+3. Envie `/start`
+4. O bot vai registrar seu usuário e exibir o menu completo
 
-# Instalar dependência
-pip install requests
+> ⚠️ O primeiro usuário que enviar `/start` fica como administrador. Outros usuários serão bloqueados automaticamente.
 
-# Rodar o bot
-python3 bot.py
-```
+---
 
 ### Instalar como serviço (recomendado)
 
@@ -131,8 +152,8 @@ sudo bash install.sh
 
 O instalador configura automaticamente:
 - Ambiente virtual Python
-- Serviço systemd `woncloud-bot` (auto-restart)
-- Serviço systemd `woncloud-boot-notify` (notificação pós-reboot)
+- Serviço systemd `woncloud-bot` (reinicia automaticamente se cair)
+- Serviço systemd `woncloud-boot-notify` (notifica no Telegram após reboot)
 - Cron job para relatório diário às 08h
 
 ---
