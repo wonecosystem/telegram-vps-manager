@@ -1,0 +1,25 @@
+# Configuração sensível (token e chat_id)
+config.json
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Arquivos de instalação temporários
+install_panel_en.sh
+aaClaw.sh
+/tmp/cp_install.sh
+
+# Sistema
+.DS_Store
+Thumbs.db
