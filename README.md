@@ -144,6 +144,18 @@ Ao final você verá:
 
 ---
 
+### Atualizar para uma versão mais recente
+
+Quando houver novos recursos disponíveis, basta rodar na VPS:
+
+```bash
+cd ~/telegram-vps-manager && git pull && sudo bash install.sh
+```
+
+> O instalador detecta que o bot já está configurado e **preserva seu token e configurações** automaticamente — sem precisar digitar nada novamente.
+
+---
+
 ### Instalar como serviço (recomendado)
 
 ```bash
