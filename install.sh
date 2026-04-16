@@ -39,10 +39,8 @@ done
 # Detecta versão do Python e instala o pacote venv correto (ex: python3.12-venv)
 PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 VENV_PKG="python${PY_VER}-venv"
-echo "  Verificando $VENV_PKG para Python $PY_VER..."
-if ! python3 -m venv --help &>/dev/null; then
-    apt-get install -y -qq "$VENV_PKG" || apt-get install -y -qq python3-venv
-fi
+echo "  Instalando $VENV_PKG para Python $PY_VER..."
+apt-get install -y -qq "$VENV_PKG" || apt-get install -y -qq python3-venv || true
 ok "python venv disponível (Python $PY_VER)"
 
 # ─── 2. Diretório de instalação ───────────────────────────────────────────────
