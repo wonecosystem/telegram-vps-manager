@@ -1,0 +1,6 @@
+{
+  "token": "SEU_TOKEN_AQUI",
+  "cpu_alert_threshold": 80,
+  "disk_alert_threshold": 80,
+  "monitor_interval": 300
+}
