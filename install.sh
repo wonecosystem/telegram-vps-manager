@@ -26,7 +26,7 @@ echo ""
 echo "▶ Verificando dependências..."
 apt-get update -qq
 
-for pkg in python3 python3-venv python3-pip; do
+for pkg in python3 python3-pip; do
     if ! dpkg -l "$pkg" &>/dev/null; then
         echo "  Instalando $pkg..."
         apt-get install -y -qq "$pkg"
@@ -35,6 +35,15 @@ for pkg in python3 python3-venv python3-pip; do
         ok "$pkg já instalado"
     fi
 done
+
+# Detecta versão do Python e instala o pacote venv correto (ex: python3.12-venv)
+PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+VENV_PKG="python${PY_VER}-venv"
+echo "  Verificando $VENV_PKG para Python $PY_VER..."
+if ! python3 -m venv --help &>/dev/null; then
+    apt-get install -y -qq "$VENV_PKG" || apt-get install -y -qq python3-venv
+fi
+ok "python venv disponível (Python $PY_VER)"
 
 # ─── 2. Diretório de instalação ───────────────────────────────────────────────
 echo ""
