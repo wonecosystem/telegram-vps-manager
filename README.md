@@ -90,7 +90,12 @@ cd telegram-vps-manager
 
 ### Configurar
 
-Crie o arquivo `config.json` com seu token:
+Copie o arquivo de exemplo e edite com seu token:
+
+```bash
+cp config.json.example config.json
+nano config.json
+```
 
 ```json
 {
@@ -101,7 +106,8 @@ Crie o arquivo `config.json` com seu token:
 }
 ```
 
-> O `chat_id` será registrado automaticamente quando você enviar `/start` ao bot pela primeira vez.
+> O `chat_id` é registrado automaticamente no primeiro `/start`.
+> O `install.sh` solicita o token interativamente — não é necessário editar o arquivo manualmente.
 
 ### Instalar dependências e rodar
 
