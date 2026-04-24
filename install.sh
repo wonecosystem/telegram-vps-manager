@@ -164,7 +164,7 @@ echo ""
 echo "▶ Ativando serviços..."
 systemctl daemon-reload
 systemctl enable woncloud-bot woncloud-boot-notify
-systemctl restart woncloud-bot
+systemctl restart woncloud-bot &
 ok "woncloud-bot iniciado"
 
 # ─── Resumo ───────────────────────────────────────────────────────────────────
