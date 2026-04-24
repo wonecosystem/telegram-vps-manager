@@ -661,8 +661,9 @@ def _run_atualizar_bot(chat_id):
                                 shell=True, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
 
             if r2.returncode == 0:
-                send(chat_id, "✅ *Bot atualizado com sucesso!*\n\n🔄 O serviço foi reiniciado automaticamente.")
                 logging.info(f"Bot atualizado com sucesso (chat_id={chat_id})")
+                send(chat_id, "✅ *Bot atualizado com sucesso!*\n\n🔄 O serviço foi reiniciado automaticamente.")
+                time.sleep(1)
             else:
                 erro = (r2.stderr or r2.stdout or "Sem detalhes.")[-1500:]
                 send(chat_id, f"❌ *Erro na instalação*\n\n```\n{erro}\n```")
