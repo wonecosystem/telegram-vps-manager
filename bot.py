@@ -580,6 +580,16 @@ def handle_port_input(chat_id, text):
 
 # ─── Manutenção ────────────────────────────────────────────────────────────────
 
+def cmd_atualizar(chat_id):
+    send_buttons(chat_id,
+        "🔄 *Menu de Atualização*\n\n"
+        "Escolha o que deseja atualizar:",
+        [[
+            {"text": "🖥️ Sistema",  "callback_data": "update_sistema_info"},
+            {"text": "🤖 Bot",      "callback_data": "update_bot_info"},
+        ]]
+    )
+
 def cb_update_sistema_info(chat_id):
     send_buttons(chat_id,
         "🔄 *Atualizar Sistema*\n\n"
@@ -622,6 +632,52 @@ def _run_atualizar_sistema(chat_id):
         logging.error(f"Erro na atualização: {e}")
 
 _reboot_pending = {}
+
+def cb_update_bot_info(chat_id):
+    send_buttons(chat_id,
+        "🤖 *Atualizar Bot*\n\n"
+        "Isso vai executar:\n"
+        "`cd ~/woncloud-bot && git pull && sudo bash install.sh --no-restart`\n\n"
+        "⚠️ *Atenção:*\n"
+        "• O bot será atualizado com a versão mais recente\n"
+        "• O serviço será reiniciado após confirmação\n"
+        "• Pode levar alguns minutos\n"
+        "• Você será notificado quando concluir\n\n"
+        "Confirma a atualização do bot?",
+        [[
+            {"text": "✅ Sim, atualizar", "callback_data": "update_bot_go"},
+            {"text": "❌ Cancelar",       "callback_data": "install_cancel"},
+        ]]
+    )
+
+def _run_atualizar_bot(chat_id):
+    logging.info(f"Iniciando atualização do bot (chat_id={chat_id})")
+    try:
+        send(chat_id, "⏳ *Atualizando repositório...*")
+        r1 = subprocess.run("cd /home/woncloud/woncloud-bot && git pull",
+                            shell=True, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+
+        if "Already up to date" in r1.stdout or r1.returncode == 0:
+            send(chat_id, "⏳ *Instalando atualização...*")
+            r2 = subprocess.run("cd /home/woncloud/woncloud-bot && sudo -n bash install.sh --no-restart",
+                                shell=True, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
+
+            if r2.returncode == 0:
+                send(chat_id, "✅ *Bot atualizado com sucesso!*\n\n🔄 O serviço será reiniciado em 3 segundos...")
+                logging.info(f"Bot atualizado com sucesso (chat_id={chat_id})")
+                time.sleep(3)
+                subprocess.Popen("systemctl restart woncloud-bot", shell=True)
+            else:
+                erro = (r2.stderr or r2.stdout or "Sem detalhes.")[-1500:]
+                send(chat_id, f"❌ *Erro na instalação*\n\n```\n{erro}\n```")
+        else:
+            erro = (r1.stderr or r1.stdout or "Sem detalhes.")[-1500:]
+            send(chat_id, f"❌ *Erro ao atualizar repositório*\n\n```\n{erro}\n```")
+    except subprocess.TimeoutExpired:
+        send(chat_id, "⏱️ *Timeout* — A atualização excedeu o tempo limite.")
+    except Exception as e:
+        send(chat_id, f"❌ *Erro inesperado:* `{e}`")
+        logging.error(f"Erro na atualização do bot: {e}")
 
 def cmd_reboot(chat_id):
     _reboot_pending[chat_id] = time.time()
@@ -1269,6 +1325,10 @@ def handle_callback(callback):
     elif data == "update_sistema_go":
         send(chat_id, "⏳ *Atualização iniciada em background.*\nVocê será notificado ao concluir.")
         threading.Thread(target=_run_atualizar_sistema, args=(chat_id,), daemon=True).start()
+    elif data == "update_bot_info":         cb_update_bot_info(chat_id)
+    elif data == "update_bot_go":
+        send(chat_id, "⏳ *Atualização iniciada em background.*\nVocê será notificado ao concluir.")
+        threading.Thread(target=_run_atualizar_bot, args=(chat_id,), daemon=True).start()
     elif data == "install_easypanel_info":  cb_easypanel_info(chat_id)
     elif data == "install_easypanel_go":    cb_easypanel_go(chat_id)
     elif data == "install_coolify_info":    cb_coolify_info(chat_id)
@@ -1386,7 +1446,7 @@ def handle(message):
     elif cmd == "unban":            cmd_unban(chat_id, args[0] if args else "")
     elif cmd == "firewall":         cmd_firewall(chat_id)
     elif cmd == "instalar":         cmd_instalar(chat_id)
-    elif cmd == "atualizar":        cb_update_sistema_info(chat_id)
+    elif cmd == "atualizar":        cmd_atualizar(chat_id)
     elif cmd == "reboot":           cmd_reboot(chat_id)
     elif cmd == "confirmarreboot":  cmd_confirmar_reboot(chat_id)
     elif cmd == "cancelar":

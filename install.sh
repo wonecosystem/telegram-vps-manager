@@ -4,6 +4,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
+NO_RESTART="${1:-}"
 INSTALL_DIR="/opt/woncloud-bot"
 VENV_DIR="$INSTALL_DIR/venv"
 PYTHON="$VENV_DIR/bin/python3"
@@ -164,8 +165,12 @@ echo ""
 echo "▶ Ativando serviços..."
 systemctl daemon-reload
 systemctl enable woncloud-bot woncloud-boot-notify
-systemctl restart woncloud-bot &
-ok "woncloud-bot iniciado"
+if [ "$NO_RESTART" != "--no-restart" ]; then
+    systemctl restart woncloud-bot &
+    ok "woncloud-bot iniciado"
+else
+    ok "woncloud-bot configurado (restart será feito manualmente)"
+fi
 
 # ─── Resumo ───────────────────────────────────────────────────────────────────
 echo ""
