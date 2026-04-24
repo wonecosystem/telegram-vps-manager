@@ -103,6 +103,7 @@ def set_commands():
         {"command": "banned",     "description": "IPs banidos agora"},
         {"command": "unban",      "description": "Desbanir IP: /unban 1.2.3.4"},
         {"command": "firewall",   "description": "Gerenciar firewall (UFW)"},
+        {"command": "controle",   "description": "Controlar serviços (iniciar/parar/reiniciar)"},
         {"command": "instalar",   "description": "Instalar aplicações no servidor"},
         {"command": "atualizar",  "description": "Atualizar pacotes do servidor"},
         {"command": "reboot",     "description": "Reiniciar o servidor (pede confirmação)"},
@@ -160,6 +161,7 @@ def cmd_start(chat_id, user):
         "📦 *INSTALAÇÕES*\n"
         "/instalar — Instalar aplicações\n\n"
         "⚙️ *MANUTENÇÃO*\n"
+        "/controle — Controlar serviços\n"
         "/atualizar — Atualizar pacotes\n"
         "/reboot — Reiniciar o servidor\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -237,6 +239,95 @@ def cmd_servicos(chat_id):
     if not found:
         lines.append("_Nenhum serviço conhecido encontrado._")
     send(chat_id, "\n".join(lines))
+
+
+def cmd_controle_servicos(chat_id):
+    candidates = [
+        ("ssh",        "🔐 SSH"),
+        ("sshd",       "🔐 SSH"),
+        ("nginx",      "🌍 Nginx"),
+        ("apache2",    "🌍 Apache2"),
+        ("mysql",      "🗄️ MySQL"),
+        ("mariadb",    "🗄️ MariaDB"),
+        ("postgresql", "🗄️ PostgreSQL"),
+        ("docker",     "🐳 Docker"),
+        ("fail2ban",   "🔒 Fail2Ban"),
+        ("cron",       "⏱️ Cron"),
+    ]
+
+    lines = ["🔧 *Controle de Serviços*\n"]
+    buttons = []
+    seen = set()
+
+    for svc, emoji in candidates:
+        if svc in seen:
+            continue
+        exists = subprocess.run(
+            f"systemctl list-units --full --all --no-pager {svc}.service | grep -c '{svc}.service'",
+            shell=True, capture_output=True
+        ).returncode == 0
+        if not exists:
+            continue
+
+        seen.add(svc)
+        status = run(f"systemctl is-active {svc}").strip()
+        icon = "🟢" if status == "active" else "🔴"
+        lines.append(f"{icon} {emoji} {svc.capitalize()}")
+        buttons.append({"text": f"⚙️ {emoji} {svc.capitalize()}", "callback_data": f"svc_menu_{svc}"})
+
+    if len(buttons) == 0:
+        send(chat_id, "Nenhum serviço detectado no servidor.")
+        return
+
+    buttons_grid = [[buttons[i], buttons[i+1]] if i+1 < len(buttons) else [buttons[i]] for i in range(0, len(buttons), 2)]
+    send_buttons(chat_id, "\n".join(lines), buttons_grid)
+
+
+def cb_svc_menu(chat_id, svc):
+    status = run(f"systemctl is-active {svc}").strip()
+    icon = "🟢" if status == "active" else "🔴"
+
+    msg = f"⚙️ *{svc.capitalize()}*\n\nStatus: {icon} {status.upper()}"
+    buttons = []
+
+    if status != "active":
+        buttons.append({"text": "▶️ Iniciar", "callback_data": f"svc_start_{svc}"})
+    if status == "active":
+        buttons.append({"text": "⏹ Parar", "callback_data": f"svc_stop_{svc}"})
+
+    buttons.append({"text": "🔄 Reiniciar", "callback_data": f"svc_restart_{svc}"})
+    buttons.append({"text": "◀️ Voltar", "callback_data": "cmd_controle"})
+
+    buttons_grid = [[buttons[i], buttons[i+1]] if i+1 < len(buttons) else [buttons[i]] for i in range(0, len(buttons), 2)]
+    send_buttons(chat_id, msg, buttons_grid)
+
+
+def cb_svc_confirmar(chat_id, action, svc):
+    msg = f"⚠️ *Confirma {action.upper()} do {svc.capitalize()}?*"
+    buttons = [
+        [
+            {"text": "✅ Sim", "callback_data": f"svc_do_{action}_{svc}"},
+            {"text": "❌ Cancelar", "callback_data": "install_cancel"},
+        ]
+    ]
+    send_buttons(chat_id, msg, buttons)
+
+
+def cb_svc_executar(chat_id, action, svc):
+    try:
+        result = subprocess.run(
+            f"systemctl {action} {svc}",
+            shell=True, capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL
+        )
+        if result.returncode == 0:
+            send(chat_id, f"✅ *{svc.capitalize()} {action}* executado com sucesso!")
+        else:
+            erro = result.stderr or result.stdout or "Sem detalhes"
+            send(chat_id, f"❌ *Erro ao {action} {svc}*\n\n```\n{erro[-500:]}\n```")
+    except subprocess.TimeoutExpired:
+        send(chat_id, "⏱️ *Timeout* — Operação excedeu o tempo limite.")
+    except Exception as e:
+        send(chat_id, f"❌ *Erro inesperado:* `{e}`")
 
 
 def cmd_processos(chat_id):
@@ -1346,6 +1437,13 @@ def handle_callback(callback):
     elif data == "install_woncode_go":      cb_woncode_go(chat_id)
     elif data == "install_fail2ban_info":   cb_fail2ban_info(chat_id)
     elif data == "install_fail2ban_go":     cb_fail2ban_go(chat_id)
+    elif data == "cmd_controle":            cmd_controle_servicos(chat_id)
+    elif data.startswith("svc_menu_"):      cb_svc_menu(chat_id, data[9:])
+    elif data.startswith("svc_start_"):     cb_svc_executar(chat_id, "start", data[10:])
+    elif data.startswith("svc_stop_"):      cb_svc_confirmar(chat_id, "stop", data[9:])
+    elif data.startswith("svc_restart_"):   cb_svc_confirmar(chat_id, "restart", data[12:])
+    elif data.startswith("svc_do_stop_"):   cb_svc_executar(chat_id, "stop", data[12:])
+    elif data.startswith("svc_do_restart_"): cb_svc_executar(chat_id, "restart", data[15:])
     elif data == "install_cancel":
         send(chat_id, "❌ Operação cancelada.")
     else:
@@ -1445,6 +1543,7 @@ def handle(message):
     elif cmd == "banned":           cmd_banned(chat_id)
     elif cmd == "unban":            cmd_unban(chat_id, args[0] if args else "")
     elif cmd == "firewall":         cmd_firewall(chat_id)
+    elif cmd == "controle":         cmd_controle_servicos(chat_id)
     elif cmd == "instalar":         cmd_instalar(chat_id)
     elif cmd == "atualizar":        cmd_atualizar(chat_id)
     elif cmd == "reboot":           cmd_reboot(chat_id)
