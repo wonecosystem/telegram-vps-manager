@@ -208,7 +208,6 @@ def cmd_status(chat_id):
 def cmd_servicos(chat_id):
     candidates = [
         ("ssh",        "🔐 SSH"),
-        ("sshd",       "🔐 SSH"),
         ("nginx",      "🌍 Nginx"),
         ("apache2",    "🌍 Apache2"),
         ("mysql",      "🗄️ MySQL"),
@@ -244,7 +243,6 @@ def cmd_servicos(chat_id):
 def cmd_controle_servicos(chat_id):
     candidates = [
         ("ssh",        "🔐 SSH"),
-        ("sshd",       "🔐 SSH"),
         ("nginx",      "🌍 Nginx"),
         ("apache2",    "🌍 Apache2"),
         ("mysql",      "🗄️ MySQL"),
