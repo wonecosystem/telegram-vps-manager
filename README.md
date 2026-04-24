@@ -1,4 +1,4 @@
-# 🤖 Telegram VPS Manager
+# 🤖 WonCloud Bot
 
 > **Gerencie seu servidor Linux direto pelo Telegram — sem acessar terminal.**
 
@@ -52,7 +52,7 @@ Desenvolvido com foco em **simplicidade, segurança e praticidade**, ideal para 
 ### ⚙️ Manutenção
 | Comando | Descrição |
 |---|---|
-| `/atualizar` | `apt update && apt upgrade -y` com notificação ao concluir |
+| `/atualizar` | Menu para atualizar **Sistema** (apt) ou **Bot** (git + install.sh) |
 | `/reboot` | Reiniciar o servidor com confirmação de segurança |
 
 ### 🔔 Alertas Automáticos
@@ -146,10 +146,15 @@ Ao final você verá:
 
 ### Atualizar para uma versão mais recente
 
-Quando houver novos recursos disponíveis, basta rodar na VPS:
+**Opção 1 — Via Telegram (recomendado):**
+1. Envie `/atualizar` no bot
+2. Escolha `🤖 Bot`
+3. Confirme a atualização
+4. O bot será atualizado e reiniciado automaticamente
 
+**Opção 2 — Via terminal da VPS:**
 ```bash
-cd ~/telegram-vps-manager && git pull && sudo bash install.sh
+cd /home/woncloud/woncloud-bot && git pull && sudo bash install.sh
 ```
 
 > O instalador detecta que o bot já está configurado e **preserva seu token e configurações** automaticamente — sem precisar digitar nada novamente.
@@ -192,6 +197,67 @@ telegram-vps-manager/
 | `cpu_alert_threshold` | `80` | % de CPU para disparar alerta |
 | `disk_alert_threshold` | `80` | % de disco para disparar alerta |
 | `monitor_interval` | `300` | Intervalo de monitoramento em segundos |
+
+---
+
+## 💡 Sugestões de Novos Recursos
+
+Ideias de funcionalidades úteis para expandir o bot:
+
+### 📊 Monitoramento Avançado
+- **Gráficos em tempo real** — Histórico de CPU/RAM/Disco (últimas 24h)
+- **Alertas personalizados** — Definir limites diferentes por recurso
+- **Notificações de serviços** — Alerta quando um serviço cai
+- **Monitoramento de portas** — Verificar se portas críticas estão abertas
+- **Temperatura do sistema** — Monitorar hardware (se disponível)
+
+### 🔧 Gerenciamento de Serviços
+- **Controlar serviços** — Iniciar, parar, reiniciar via botões (Nginx, Docker, MySQL, etc.)
+- **Gerenciar cron jobs** — Listar, editar, deletar tarefas agendadas
+- **Gerenciar usuários/grupos** — Criar, deletar, modificar permissões
+- **Backup automático** — Agendar e executar backups via Telegram
+- **Gerenciador de certificados SSL** — Renovar, listar certificados Let's Encrypt
+
+### 📈 Performance & Otimização
+- **Cache stats** — Redis, Memcached status e estatísticas
+- **Banco de dados** — Status MySQL/MariaDB, espaço em disco
+- **Conexões SSH ativas** — Listar IPs conectados ao servidor
+- **Limite de conexões por IP** — Bloquear múltiplas conexões do mesmo IP
+- **Limpeza de logs** — Limpar logs antigos para liberar espaço
+
+### 🔒 Segurança Avançada
+- **Auditoria de permissões** — Arquivos SUID, SGID suspeitos
+- **Verificação de integridade** — Monitorar mudanças em arquivos críticos
+- **Análise de trojans** — Integrar com ClamAV para verificação
+- **Report de atividades** — Login attempts, failed commands
+- **Controle de SSH** — Desabilitar root login, mudar porta, etc.
+
+### 📁 Gerenciamento de Arquivos
+- **Editor de arquivos simples** — Editar conf.d, scripts pequenos
+- **Upload/Download** — Transferir arquivos via Telegram
+- **Compressão de arquivos** — Zipar/unzipar diretórios
+- **Quota de disco** — Ver limite de espaço por usuário
+- **Procurar arquivos** — Find por padrão (logs, configs, etc.)
+
+### 📧 Notificações & Integração
+- **Integração com Discord** — Replicar alertas no Discord
+- **Email de alertas** — Enviar relatórios por email
+- **Webhook customizado** — Chamar URLs externas em eventos
+- **Integrações IFTTT** — Automações avançadas
+- **Health checks** — Ping endpoints HTTP e reportar status
+
+### 🎯 Utilidades
+- **Whois/DNS avançado** — Informações detalhadas de domínios
+- **Speed test** — Testar velocidade de internet
+- **Uptime monitor** — Monitorar sites/serviços e alertar
+- **Gerenciador de proxies** — Listar IPs bloqueados, whitelist
+- **Relatórios em PDF** — Gerar relatórios mensais formatados
+
+### 🚀 Automação
+- **Agendador de tarefas** — Agendar comandos para horários específicos
+- **Scripts customizados** — Executar scripts próprios com confirmação
+- **Webhook listener** — Receber comandos de sistemas externos
+- **Template de deploy** — Deploy de apps (Docker, Node, Python, etc.)
 
 ---
 
