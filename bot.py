@@ -262,11 +262,11 @@ def cmd_controle_servicos(chat_id):
     for svc, emoji in candidates:
         if svc in seen:
             continue
-        exists = subprocess.run(
-            f"systemctl list-units --full --all --no-pager {svc}.service | grep -c '{svc}.service'",
-            shell=True, capture_output=True
-        ).returncode == 0
-        if not exists:
+        result = subprocess.run(
+            f"systemctl list-units --type=service --all --quiet {svc}.service 2>/dev/null",
+            shell=True, capture_output=True, text=True
+        )
+        if result.returncode != 0:
             continue
 
         seen.add(svc)
