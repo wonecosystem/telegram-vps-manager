@@ -321,9 +321,74 @@ def cb_svc_executar(chat_id, action, svc):
             send(chat_id, f"✅ *{svc.capitalize()} {action}* executado com sucesso!")
         else:
             erro = result.stderr or result.stdout or "Sem detalhes"
-            send(chat_id, f"❌ *Erro ao {action} {svc}*\n\n```\n{erro[-500:]}\n```")
+            if "not found" in erro.lower() or "could not be found" in erro.lower():
+                cb_svc_install_options(chat_id, svc)
+            else:
+                send(chat_id, f"❌ *Erro ao {action} {svc}*\n\n```\n{erro[-500:]}\n```")
     except subprocess.TimeoutExpired:
         send(chat_id, "⏱️ *Timeout* — Operação excedeu o tempo limite.")
+    except Exception as e:
+        send(chat_id, f"❌ *Erro inesperado:* `{e}`")
+
+
+SERVICE_PACKAGES = {
+    "nginx": "nginx",
+    "apache2": "apache2",
+    "mysql": "mysql-server",
+    "mariadb": "mariadb-server",
+    "postgresql": "postgresql",
+    "docker": "docker.io",
+    "fail2ban": "fail2ban",
+}
+
+
+def cb_svc_install_options(chat_id, svc):
+    package = SERVICE_PACKAGES.get(svc, svc)
+    msg = (
+        f"❌ *{svc.capitalize()} não está instalado*\n\n"
+        f"Para instalar, você pode:\n\n"
+        f"**Opção 1 — Instalação automática:**\n"
+        f"Clique no botão 📥 Instalar\n\n"
+        f"**Opção 2 — Instalar manualmente:**\n"
+        f"```\n"
+        f"sudo apt update\n"
+        f"sudo apt install -y {package}\n"
+        f"```"
+    )
+    buttons = [
+        [
+            {"text": "📥 Instalar Automaticamente", "callback_data": f"svc_install_auto_{svc}"},
+            {"text": "◀️ Voltar", "callback_data": f"svc_menu_{svc}"},
+        ]
+    ]
+    send_buttons(chat_id, msg, buttons)
+
+
+def cb_svc_install_auto(chat_id, svc):
+    package = SERVICE_PACKAGES.get(svc, svc)
+    send(chat_id, f"⏳ *Instalando {svc.capitalize()}...*\n\nIsso pode levar alguns minutos.")
+
+    try:
+        result = subprocess.run(
+            f"apt update && apt install -y {package}",
+            shell=True, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL
+        )
+        if result.returncode == 0:
+            send(chat_id, f"✅ *{svc.capitalize()} instalado com sucesso!*\n\n🔄 Tentando iniciar o serviço...")
+            time.sleep(2)
+            result2 = subprocess.run(
+                f"systemctl start {svc}",
+                shell=True, capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL
+            )
+            if result2.returncode == 0:
+                send(chat_id, f"✅ *{svc.capitalize()} iniciado com sucesso!*")
+            else:
+                send(chat_id, f"⚠️ *{svc.capitalize()} instalado, mas houve um erro ao iniciar.*\n\nTente: `systemctl start {svc}`")
+        else:
+            erro = result.stderr or result.stdout or "Erro desconhecido"
+            send(chat_id, f"❌ *Erro na instalação*\n\n```\n{erro[-500:]}\n```")
+    except subprocess.TimeoutExpired:
+        send(chat_id, "⏱️ *Timeout* — Instalação excedeu o tempo limite.")
     except Exception as e:
         send(chat_id, f"❌ *Erro inesperado:* `{e}`")
 
@@ -1442,6 +1507,7 @@ def handle_callback(callback):
     elif data.startswith("svc_restart_"):   cb_svc_confirmar(chat_id, "restart", data[12:])
     elif data.startswith("svc_do_stop_"):   cb_svc_executar(chat_id, "stop", data[12:])
     elif data.startswith("svc_do_restart_"): cb_svc_executar(chat_id, "restart", data[15:])
+    elif data.startswith("svc_install_auto_"): cb_svc_install_auto(chat_id, data[17:])
     elif data == "install_cancel":
         send(chat_id, "❌ Operação cancelada.")
     else:
