@@ -627,11 +627,11 @@ def _run_atualizar_sistema(chat_id):
     logging.info(f"Iniciando atualização do sistema (chat_id={chat_id})")
     try:
         send(chat_id, "⏳ *Executando `apt-get update`...*")
-        subprocess.run("apt-get update", shell=True, capture_output=True, text=True, timeout=300)
+        subprocess.run("apt-get update", shell=True, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
 
         send(chat_id, "⏳ *Executando `apt-get upgrade -y`...*")
         r2 = subprocess.run("DEBIAN_FRONTEND=noninteractive apt-get upgrade -y",
-                            shell=True, capture_output=True, text=True, timeout=1800)
+                            shell=True, capture_output=True, text=True, timeout=1800, stdin=subprocess.DEVNULL)
 
         if r2.returncode == 0:
             upgraded = len(re.findall(r"^Unpacking|^Setting up", r2.stdout, re.MULTILINE))
@@ -653,12 +653,12 @@ def _run_atualizar_bot(chat_id):
     try:
         send(chat_id, "⏳ *Atualizando repositório...*")
         r1 = subprocess.run("cd /home/woncloud/woncloud-bot && git pull",
-                            shell=True, capture_output=True, text=True, timeout=60)
+                            shell=True, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
 
         if "Already up to date" in r1.stdout or r1.returncode == 0:
             send(chat_id, "⏳ *Instalando atualização...*")
             r2 = subprocess.run("cd /home/woncloud/woncloud-bot && sudo bash install.sh",
-                                shell=True, capture_output=True, text=True, timeout=300)
+                                shell=True, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
 
             if r2.returncode == 0:
                 send(chat_id, "✅ *Bot atualizado com sucesso!*\n\n🔄 O serviço foi reiniciado automaticamente.")
