@@ -657,7 +657,7 @@ def _run_atualizar_bot(chat_id):
 
         if "Already up to date" in r1.stdout or r1.returncode == 0:
             send(chat_id, "⏳ *Instalando atualização...*")
-            r2 = subprocess.run("cd /home/woncloud/woncloud-bot && sudo bash install.sh",
+            r2 = subprocess.run("cd /home/woncloud/woncloud-bot && sudo -n bash install.sh",
                                 shell=True, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
 
             if r2.returncode == 0:
