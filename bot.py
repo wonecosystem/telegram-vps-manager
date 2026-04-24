@@ -582,7 +582,17 @@ def handle_port_input(chat_id, text):
 
 def cmd_atualizar(chat_id):
     send_buttons(chat_id,
-        "🔄 *Atualizar pacotes do servidor*\n\n"
+        "🔄 *Menu de Atualização*\n\n"
+        "Escolha o que deseja atualizar:",
+        [[
+            {"text": "🖥️ Sistema",  "callback_data": "update_sistema_info"},
+            {"text": "🤖 Bot",      "callback_data": "update_bot_info"},
+        ]]
+    )
+
+def cb_update_sistema_info(chat_id):
+    send_buttons(chat_id,
+        "🔄 *Atualizar Sistema*\n\n"
         "Isso vai executar:\n"
         "`apt-get update && apt-get upgrade -y`\n\n"
         "⚠️ *Atenção:*\n"
@@ -591,12 +601,29 @@ def cmd_atualizar(chat_id):
         "• Você será notificado quando concluir\n\n"
         "Confirma a atualização?",
         [[
-            {"text": "✅ Sim, atualizar", "callback_data": "update_vps_go"},
+            {"text": "✅ Sim, atualizar", "callback_data": "update_sistema_go"},
             {"text": "❌ Cancelar",       "callback_data": "install_cancel"},
         ]]
     )
 
-def _run_atualizar(chat_id):
+def cb_update_bot_info(chat_id):
+    send_buttons(chat_id,
+        "🤖 *Atualizar Bot*\n\n"
+        "Isso vai executar:\n"
+        "`cd ~/telegram-vps-manager && git pull && sudo bash install.sh`\n\n"
+        "⚠️ *Atenção:*\n"
+        "• O bot será reinstalado com a versão mais recente\n"
+        "• O serviço será reiniciado\n"
+        "• Pode levar alguns minutos\n"
+        "• Você será notificado quando concluir\n\n"
+        "Confirma a atualização do bot?",
+        [[
+            {"text": "✅ Sim, atualizar", "callback_data": "update_bot_go"},
+            {"text": "❌ Cancelar",       "callback_data": "install_cancel"},
+        ]]
+    )
+
+def _run_atualizar_sistema(chat_id):
     logging.info(f"Iniciando atualização do sistema (chat_id={chat_id})")
     try:
         send(chat_id, "⏳ *Executando `apt-get update`...*")
@@ -620,6 +647,33 @@ def _run_atualizar(chat_id):
     except Exception as e:
         send(chat_id, f"❌ *Erro inesperado:* `{e}`")
         logging.error(f"Erro na atualização: {e}")
+
+def _run_atualizar_bot(chat_id):
+    logging.info(f"Iniciando atualização do bot (chat_id={chat_id})")
+    try:
+        send(chat_id, "⏳ *Atualizando repositório...*")
+        r1 = subprocess.run("cd /home/woncloud/woncloud-bot && git pull",
+                            shell=True, capture_output=True, text=True, timeout=60)
+
+        if "Already up to date" in r1.stdout or r1.returncode == 0:
+            send(chat_id, "⏳ *Instalando atualização...*")
+            r2 = subprocess.run("cd /home/woncloud/woncloud-bot && sudo bash install.sh",
+                                shell=True, capture_output=True, text=True, timeout=300)
+
+            if r2.returncode == 0:
+                send(chat_id, "✅ *Bot atualizado com sucesso!*\n\n🔄 O serviço foi reiniciado automaticamente.")
+                logging.info(f"Bot atualizado com sucesso (chat_id={chat_id})")
+            else:
+                erro = (r2.stderr or r2.stdout or "Sem detalhes.")[-1500:]
+                send(chat_id, f"❌ *Erro na instalação*\n\n```\n{erro}\n```")
+        else:
+            erro = (r1.stderr or r1.stdout or "Sem detalhes.")[-1500:]
+            send(chat_id, f"❌ *Erro ao atualizar repositório*\n\n```\n{erro}\n```")
+    except subprocess.TimeoutExpired:
+        send(chat_id, "⏱️ *Timeout* — A atualização excedeu o tempo limite.")
+    except Exception as e:
+        send(chat_id, f"❌ *Erro inesperado:* `{e}`")
+        logging.error(f"Erro na atualização do bot: {e}")
 
 
 _reboot_pending = {}
@@ -1266,6 +1320,14 @@ def handle_callback(callback):
     elif data == "fw_open_port":            cb_fw_open_port(chat_id)
     elif data == "fw_close_port":           cb_fw_close_port(chat_id)
     elif data == "fw_reload":               run("ufw reload") ; send(chat_id, "🔄 Regras do firewall recarregadas.")
+    elif data == "update_sistema_info":     cb_update_sistema_info(chat_id)
+    elif data == "update_bot_info":         cb_update_bot_info(chat_id)
+    elif data == "update_sistema_go":
+        send(chat_id, "⏳ *Atualização iniciada em background.*\nVocê será notificado ao concluir.")
+        threading.Thread(target=_run_atualizar_sistema, args=(chat_id,), daemon=True).start()
+    elif data == "update_bot_go":
+        send(chat_id, "⏳ *Atualização iniciada em background.*\nVocê será notificado ao concluir.")
+        threading.Thread(target=_run_atualizar_bot, args=(chat_id,), daemon=True).start()
     elif data == "install_easypanel_info":  cb_easypanel_info(chat_id)
     elif data == "install_easypanel_go":    cb_easypanel_go(chat_id)
     elif data == "install_coolify_info":    cb_coolify_info(chat_id)
@@ -1283,9 +1345,6 @@ def handle_callback(callback):
     elif data == "install_woncode_go":      cb_woncode_go(chat_id)
     elif data == "install_fail2ban_info":   cb_fail2ban_info(chat_id)
     elif data == "install_fail2ban_go":     cb_fail2ban_go(chat_id)
-    elif data == "update_vps_go":
-        send(chat_id, "⏳ *Atualização iniciada em background.*\nVocê será notificado ao concluir.")
-        threading.Thread(target=_run_atualizar, args=(chat_id,), daemon=True).start()
     elif data == "install_cancel":
         send(chat_id, "❌ Operação cancelada.")
     else:
