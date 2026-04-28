@@ -28,6 +28,8 @@ Desenvolvido com foco em **simplicidade, segurança e praticidade**, ideal para 
 | `/rede` | IP público, interfaces de rede e portas em escuta |
 | `/disco` | Uso detalhado de disco em todas as partições |
 | `/logs` | Logs do sistema: Auth, Syslog e Dmesg |
+| `/erros` | Últimos erros do sistema (journalctl) |
+| `/docker` | Status dos containers Docker |
 
 ### 🔒 Segurança
 | Comando | Descrição |
@@ -52,6 +54,8 @@ Desenvolvido com foco em **simplicidade, segurança e praticidade**, ideal para 
 ### ⚙️ Manutenção
 | Comando | Descrição |
 |---|---|
+| `/atualizacoes` | Listar pacotes pendentes de atualização |
+| `/controle` | Controlar serviços (iniciar/parar/reiniciar) |
 | `/atualizar` | Menu para atualizar **Sistema** (apt) ou **Bot** (git + install.sh) |
 | `/reboot` | Reiniciar o servidor com confirmação de segurança |
 
@@ -212,7 +216,6 @@ Ideias de funcionalidades úteis para expandir o bot:
 - **Temperatura do sistema** — Monitorar hardware (se disponível)
 
 ### 🔧 Gerenciamento de Serviços
-- **Controlar serviços** — Iniciar, parar, reiniciar via botões (Nginx, Docker, MySQL, etc.)
 - **Gerenciar cron jobs** — Listar, editar, deletar tarefas agendadas
 - **Gerenciar usuários/grupos** — Criar, deletar, modificar permissões
 - **Backup automático** — Agendar e executar backups via Telegram
