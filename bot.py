@@ -799,6 +799,7 @@ def cmd_manutencao(chat_id):
             {"text": "🔌 Reboot",       "callback_data": "man_reboot"},
         ],
         [
+            {"text": "📊 Relatório",     "callback_data": "man_relatorio"},
             {"text": "🏠 Menu Principal", "callback_data": "cmd_start"},
         ],
     ]
@@ -969,6 +970,27 @@ def _run_atualizar_bot(chat_id):
     except Exception as e:
         send(chat_id, f"❌ *Erro inesperado:* `{e}`")
         logging.error(f"Erro na atualização do bot: {e}")
+
+def _run_relatorio(chat_id):
+    logging.info(f"Executando relatório manual (chat_id={chat_id})")
+    try:
+        report_path = os.path.join(BASE_DIR, "report.py")
+        python = os.path.join(BASE_DIR, "venv", "bin", "python3")
+        r = subprocess.run([python, report_path], capture_output=True, text=True, timeout=60)
+        if r.returncode == 0 and r.stdout.strip():
+            send(chat_id, r.stdout.strip())
+        elif r.stderr.strip():
+            send(chat_id, f"❌ *Erro ao gerar relatório:*\n```\n{r.stderr.strip()[-1500:]}\n```")
+        else:
+            send(chat_id, "⚠️ Relatório gerado sem saída.")
+    except subprocess.TimeoutExpired:
+        send(chat_id, "⏱️ *Timeout* — o relatório demorou mais de 60 segundos.")
+    except Exception as e:
+        send(chat_id, f"❌ *Erro inesperado:* `{e}`")
+
+def cmd_relatorio(chat_id):
+    send(chat_id, "⏳ *Gerando relatório do servidor...*")
+    threading.Thread(target=_run_relatorio, args=(chat_id,), daemon=True).start()
 
 def cmd_reboot(chat_id):
     _reboot_pending[chat_id] = time.time()
@@ -1641,6 +1663,7 @@ def handle_callback(callback):
     elif data == "man_controle":            cmd_controle_servicos(chat_id)
     elif data == "man_atualizar":           cmd_atualizar(chat_id)
     elif data == "man_reboot":              cmd_reboot(chat_id)
+    elif data == "man_relatorio":          cmd_relatorio(chat_id)
     elif data == "menu_monitoramento":      cmd_monitoramento(chat_id)
     elif data == "menu_seguranca":          cmd_seguranca(chat_id)
     elif data == "menu_instalar":           cmd_instalar(chat_id)
@@ -1795,6 +1818,7 @@ def handle(message):
     elif cmd == "atualizacoes":     cmd_atualizacoes(chat_id)
     elif cmd == "atualizar":        cmd_atualizar(chat_id)
     elif cmd == "reboot":           cmd_reboot(chat_id)
+    elif cmd == "relatorio":       cmd_relatorio(chat_id)
     elif cmd == "confirmarreboot":  cmd_confirmar_reboot(chat_id)
     elif cmd == "cancelar":
         _awaiting_port.pop(chat_id, None)
