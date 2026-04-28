@@ -101,6 +101,7 @@ def set_commands():
         {"command": "logs",       "description": "Logs do sistema"},
         {"command": "erros",      "description": "Últimos erros do sistema (journalctl)"},
         {"command": "docker",     "description": "Status dos containers Docker"},
+        {"command": "seguranca",  "description": "Menu de segurança (Fail2Ban, Firewall, etc)"},
         {"command": "banned",     "description": "IPs banidos agora"},
         {"command": "unban",      "description": "Desbanir IP: /unban 1.2.3.4"},
         {"command": "firewall",   "description": "Gerenciar firewall (UFW)"},
@@ -158,6 +159,7 @@ def cmd_start(chat_id, user):
         "/erros — Últimos erros do sistema\n"
         "/docker — Status dos containers Docker\n\n"
         "🔒 *SEGURANÇA*\n"
+        "/seguranca — Menu de segurança\n"
         "/fail2ban — Relatório do Fail2Ban\n"
         "/banned — IPs banidos agora\n"
         "/unban `<ip>` — Desbanir um IP\n"
@@ -623,6 +625,26 @@ def cmd_unban(chat_id, ip):
         send(chat_id, f"ℹ️ IP `{ip}` não estava banido em nenhum jail.")
 
 
+# ─── Segurança — Menu ──────────────────────────────────────────────────────────
+
+def cmd_seguranca(chat_id):
+    buttons = [
+        [
+            {"text": "🔒 Fail2Ban",   "callback_data": "seg_fail2ban"},
+            {"text": "🚫 IPs Banidos", "callback_data": "seg_banned"},
+        ],
+        [
+            {"text": "🔓 Desbanir IP", "callback_data": "seg_unban"},
+            {"text": "🛡️ Firewall",   "callback_data": "seg_firewall"},
+        ],
+    ]
+    send_buttons(chat_id,
+        "🔒 *Menu de Segurança*\n\n"
+        "Escolha uma opção:",
+        buttons
+    )
+
+
 # ─── Segurança — Firewall ──────────────────────────────────────────────────────
 
 # Porta aguardando input do usuário: chat_id -> "open" | "close"
@@ -851,10 +873,11 @@ def _run_atualizar_sistema(chat_id):
 _reboot_pending = {}
 
 def cb_update_bot_info(chat_id):
+    repo_dir = cfg.get("repo_dir", "/opt/woncloud-bot")
     send_buttons(chat_id,
         "🤖 *Atualizar Bot*\n\n"
         "Isso vai executar:\n"
-        "`cd ~/woncloud-bot && git pull && sudo bash install.sh --no-restart`\n\n"
+        f"`cd {repo_dir} && git pull && sudo bash install.sh --no-restart`\n\n"
         "⚠️ *Atenção:*\n"
         "• O bot será atualizado com a versão mais recente\n"
         "• O serviço será reiniciado após confirmação\n"
@@ -869,14 +892,15 @@ def cb_update_bot_info(chat_id):
 
 def _run_atualizar_bot(chat_id):
     logging.info(f"Iniciando atualização do bot (chat_id={chat_id})")
+    repo_dir = cfg.get("repo_dir", "/opt/woncloud-bot")
     try:
         send(chat_id, "⏳ *Atualizando repositório...*")
-        r1 = subprocess.run("cd /home/woncloud/woncloud-bot && git pull",
+        r1 = subprocess.run(f"cd {repo_dir} && git pull",
                             shell=True, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
 
         if "Already up to date" in r1.stdout or r1.returncode == 0:
             send(chat_id, "⏳ *Instalando atualização...*")
-            r2 = subprocess.run("cd /home/woncloud/woncloud-bot && sudo -n bash install.sh --no-restart",
+            r2 = subprocess.run(f"cd {repo_dir} && sudo -n bash install.sh --no-restart",
                                 shell=True, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
 
             if r2.returncode == 0:
@@ -1531,7 +1555,17 @@ def handle_callback(callback):
     answer_callback(cb_id)
     logging.info(f"Callback: {data} de {chat_id}")
 
-    if   data == "logs_auth":               cb_logs(chat_id, "auth")
+    if   data == "seg_fail2ban":            cmd_fail2ban(chat_id)
+    elif data == "seg_banned":              cmd_banned(chat_id)
+    elif data == "seg_unban":
+        send(chat_id,
+            "🔓 *Desbanir IP*\n\n"
+            "Use o comando:\n"
+            "`/unban <ip>`\n\n"
+            "_Exemplo: `/unban 192.168.1.100`_"
+        )
+    elif data == "seg_firewall":            cmd_firewall(chat_id)
+    elif data == "logs_auth":               cb_logs(chat_id, "auth")
     elif data == "logs_syslog":             cb_logs(chat_id, "syslog")
     elif data == "logs_dmesg":              cb_logs(chat_id, "dmesg")
     elif data == "fw_enable":               cb_fw_enable(chat_id)
@@ -1668,6 +1702,7 @@ def handle(message):
     elif cmd == "logs":             cmd_logs(chat_id)
     elif cmd == "erros":            cmd_erros(chat_id)
     elif cmd == "docker":          cmd_docker(chat_id)
+    elif cmd == "seguranca":        cmd_seguranca(chat_id)
     elif cmd == "fail2ban":         cmd_fail2ban(chat_id)
     elif cmd == "banned":           cmd_banned(chat_id)
     elif cmd == "unban":            cmd_unban(chat_id, args[0] if args else "")

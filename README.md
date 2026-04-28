@@ -34,6 +34,7 @@ Desenvolvido com foco em **simplicidade, segurança e praticidade**, ideal para 
 ### 🔒 Segurança
 | Comando | Descrição |
 |---|---|
+| `/seguranca` | Menu de segurança com acesso a todos os recursos |
 | `/fail2ban` | Relatório completo por jail |
 | `/banned` | Lista de IPs banidos agora |
 | `/unban <ip>` | Desbanir um IP de todos os jails |
@@ -158,7 +159,7 @@ Ao final você verá:
 
 **Opção 2 — Via terminal da VPS:**
 ```bash
-cd /home/woncloud/woncloud-bot && git pull && sudo bash install.sh
+cd telegram-vps-manager && git pull && sudo bash install.sh
 ```
 
 > O instalador detecta que o bot já está configurado e **preserva seu token e configurações** automaticamente — sem precisar digitar nada novamente.
