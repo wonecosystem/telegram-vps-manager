@@ -50,7 +50,7 @@ echo "▶ Configurando diretório $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-for f in bot.py report.py boot_notify.py; do
+for f in bot.py report.py boot_notify.py install.sh; do
     if [ -f "$SCRIPT_DIR/$f" ]; then
         cp "$SCRIPT_DIR/$f" "$INSTALL_DIR/$f"
         ok "$f copiado"
@@ -58,6 +58,15 @@ for f in bot.py report.py boot_notify.py; do
         err "Arquivo $f não encontrado no diretório atual."
     fi
 done
+
+# Copia o .git para permitir git pull futuro
+if [ -d "$SCRIPT_DIR/.git" ]; then
+    rm -rf "$INSTALL_DIR/.git"
+    cp -r "$SCRIPT_DIR/.git" "$INSTALL_DIR/.git"
+    ok ".git copiado"
+else
+    warn "Diretório .git não encontrado — atualizações via git pull não funcionarão"
+fi
 
 # ─── 3. Ambiente virtual ──────────────────────────────────────────────────────
 echo ""
@@ -104,13 +113,25 @@ if [ -z "$TOKEN" ]; then
   "token": "$TOKEN",
   "cpu_alert_threshold": $CPU_THRESHOLD,
   "disk_alert_threshold": $DISK_THRESHOLD,
-  "monitor_interval": 300
+  "monitor_interval": 300,
+  "repo_dir": "$SCRIPT_DIR"
 }
 EOF
     ok "config.json criado"
 fi
 
 chmod 600 "$CONFIG_FILE"
+
+# Atualiza repo_dir sempre (para refletir o diretório atual do clone)
+python3 -c "
+import json
+with open('$CONFIG_FILE') as f:
+    cfg = json.load(f)
+cfg['repo_dir'] = '$SCRIPT_DIR'
+with open('$CONFIG_FILE', 'w') as f:
+    json.dump(cfg, f, indent=2)
+"
+ok "repo_dir atualizado: $SCRIPT_DIR"
 
 # ─── 5. Serviços systemd ──────────────────────────────────────────────────────
 echo ""
