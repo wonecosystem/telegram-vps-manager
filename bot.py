@@ -99,12 +99,14 @@ def set_commands():
         {"command": "dns",        "description": "Consulta DNS do domínio: /dns dominio.com"},
         {"command": "disco",      "description": "Uso detalhado de disco"},
         {"command": "logs",       "description": "Logs do sistema"},
-        {"command": "fail2ban",   "description": "Relatório completo do Fail2Ban"},
+        {"command": "erros",      "description": "Últimos erros do sistema (journalctl)"},
+        {"command": "docker",     "description": "Status dos containers Docker"},
         {"command": "banned",     "description": "IPs banidos agora"},
         {"command": "unban",      "description": "Desbanir IP: /unban 1.2.3.4"},
         {"command": "firewall",   "description": "Gerenciar firewall (UFW)"},
         {"command": "controle",   "description": "Controlar serviços (iniciar/parar/reiniciar)"},
         {"command": "instalar",   "description": "Instalar aplicações no servidor"},
+        {"command": "atualizacoes","description": "Listar pacotes pendentes de atualização"},
         {"command": "atualizar",  "description": "Atualizar pacotes do servidor"},
         {"command": "reboot",     "description": "Reiniciar o servidor (pede confirmação)"},
     ]
@@ -152,7 +154,9 @@ def cmd_start(chat_id, user):
         "/ping `<host>` — Ping e rota com 5 saltos\n"
         "/dns `<dominio>` — Consulta registros DNS\n"
         "/disco — Uso detalhado de disco\n"
-        "/logs — Logs do sistema\n\n"
+        "/logs — Logs do sistema\n"
+        "/erros — Últimos erros do sistema\n"
+        "/docker — Status dos containers Docker\n\n"
         "🔒 *SEGURANÇA*\n"
         "/fail2ban — Relatório do Fail2Ban\n"
         "/banned — IPs banidos agora\n"
@@ -161,6 +165,7 @@ def cmd_start(chat_id, user):
         "📦 *INSTALAÇÕES*\n"
         "/instalar — Instalar aplicações\n\n"
         "⚙️ *MANUTENÇÃO*\n"
+        "/atualizacoes — Pacotes pendentes de update\n"
         "/controle — Controlar serviços\n"
         "/atualizar — Atualizar pacotes\n"
         "/reboot — Reiniciar o servidor\n"
@@ -733,6 +738,64 @@ def handle_port_input(chat_id, text):
 
 
 # ─── Manutenção ────────────────────────────────────────────────────────────────
+
+def cmd_docker(chat_id):
+    if not is_installed("docker"):
+        send(chat_id, "⚠️ *Docker não está instalado.*\n\nUse /instalar para instalar aplicações Docker.")
+        return
+    info = run("docker info --format '{{.ServerVersion}} | {{.OSType}} | {{.Containers}} containers | {{.Images}} images' 2>/dev/null").strip()
+    ps_out = run("docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null").strip()
+    if not ps_out:
+        ps_out = "(sem containers)"
+    if len(ps_out) > 4000:
+        ps_out = ps_out[:4000] + "\n..."
+    send(chat_id, f"🐳 *Docker*\n📅 {now()}\n\n📋 *Info:* `{info or 'n/d'}`\n\n```\n{ps_out}\n```")
+
+
+def cmd_erros(chat_id):
+    out = run("journalctl -p 3 -n 30 --no-pager 2>/dev/null").strip()
+    if not out:
+        send(chat_id, f"✅ *Nenhum erro recente no sistema.*\n📅 {now()}")
+        return
+    if len(out) > 4000:
+        out = out[-4000:]
+    send(chat_id, f"🚨 *Erros do Sistema*\n📅 {now()}\n\n```\n{out}\n```")
+
+
+def cmd_atualizacoes(chat_id):
+    cache_age = run("stat -c '%Y' /var/cache/apt/pkgcache.bin 2>/dev/null || echo 0").strip()
+    age_note = ""
+    if cache_age and cache_age.isdigit():
+        age_sec = time.time() - int(cache_age)
+        if age_sec > 86400:
+            age_note = f"\n⚠️ _Cache do apt tem {int(age_sec/86400)} dias. Execute `apt update` para atualizar._"
+        elif age_sec > 3600:
+            age_note = f"\n📌 _Cache do apt tem {int(age_sec/3600)}h._"
+
+    out = run("apt list --upgradable 2>/dev/null")
+    lines = [l for l in out.splitlines() if l.strip() and not l.startswith("Listing") and "WARNING" not in l]
+
+    if not lines:
+        send(chat_id, f"✅ *Sistema atualizado!*\n\nNenhum pacote pendente.{age_note}")
+        return
+
+    count = len(lines)
+    show = lines[:60]
+    pkg_list = "\n".join(
+        f"  `{l.split('/')[0]}` → {l.split()[-1] if len(l.split()) > 1 else '?'}"
+        for l in show
+    )
+    more = f"\n\n_... e mais {count - 60} pacotes_" if count > 60 else ""
+
+    msg = (
+        f"📦 *Pacotes Pendentes de Atualização*\n"
+        f"📅 {now()}\n\n"
+        f"🔢 *Total: {count} pacotes*{age_note}\n\n"
+        f"{pkg_list}{more}\n\n"
+        f"_Use /atualizar para instalar._"
+    )
+    send(chat_id, msg)
+
 
 def cmd_atualizar(chat_id):
     send_buttons(chat_id,
@@ -1603,12 +1666,15 @@ def handle(message):
     elif cmd == "dns":              cmd_dns(chat_id, args[0] if args else "")
     elif cmd == "disco":            cmd_disco(chat_id)
     elif cmd == "logs":             cmd_logs(chat_id)
+    elif cmd == "erros":            cmd_erros(chat_id)
+    elif cmd == "docker":          cmd_docker(chat_id)
     elif cmd == "fail2ban":         cmd_fail2ban(chat_id)
     elif cmd == "banned":           cmd_banned(chat_id)
     elif cmd == "unban":            cmd_unban(chat_id, args[0] if args else "")
     elif cmd == "firewall":         cmd_firewall(chat_id)
     elif cmd == "controle":         cmd_controle_servicos(chat_id)
     elif cmd == "instalar":         cmd_instalar(chat_id)
+    elif cmd == "atualizacoes":     cmd_atualizacoes(chat_id)
     elif cmd == "atualizar":        cmd_atualizar(chat_id)
     elif cmd == "reboot":           cmd_reboot(chat_id)
     elif cmd == "confirmarreboot":  cmd_confirmar_reboot(chat_id)
