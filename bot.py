@@ -91,6 +91,8 @@ def set_commands():
     commands = [
         {"command": "start",      "description": "Menu principal"},
         {"command": "menu",       "description": "Menu principal"},
+        {"command": "monitoramento","description": "Menu de monitoramento"},
+        {"command": "manutencao",  "description": "Menu de manutenção"},
         {"command": "status",     "description": "CPU, RAM, disco e uptime"},
         {"command": "servicos",   "description": "Status dos serviços"},
         {"command": "processos",  "description": "Top processos por CPU e RAM"},
@@ -132,6 +134,41 @@ def is_installed(pkg):
             return True
     return False
 
+# ─── Monitoramento — Menu ──────────────────────────────────────────────────────
+
+def cmd_monitoramento(chat_id):
+    buttons = [
+        [
+            {"text": "🖥️ Status",     "callback_data": "mon_status"},
+            {"text": "⚙️ Serviços",   "callback_data": "mon_servicos"},
+        ],
+        [
+            {"text": "🔝 Processos",  "callback_data": "mon_processos"},
+            {"text": "🌐 Rede",       "callback_data": "mon_rede"},
+        ],
+        [
+            {"text": "📡 Ping",       "callback_data": "mon_ping"},
+            {"text": "🔍 DNS",        "callback_data": "mon_dns"},
+        ],
+        [
+            {"text": "💿 Disco",      "callback_data": "mon_disco"},
+            {"text": "📜 Logs",       "callback_data": "mon_logs"},
+        ],
+        [
+            {"text": "🚨 Erros",      "callback_data": "mon_erros"},
+            {"text": "🐳 Docker",     "callback_data": "mon_docker"},
+        ],
+        [
+            {"text": "🏠 Menu Principal", "callback_data": "cmd_start"},
+        ],
+    ]
+    send_buttons(chat_id,
+        "🖥️ *Menu de Monitoramento*\n\n"
+        "Escolha uma opção:",
+        buttons
+    )
+
+
 # ─── Monitoramento ─────────────────────────────────────────────────────────────
 
 def cmd_start(chat_id, user):
@@ -144,38 +181,25 @@ def cmd_start(chat_id, user):
         logging.info(f"Chat ID registrado: {chat_id}")
 
     name = user.get("first_name", "Admin")
-    msg = (
+    buttons = [
+        [
+            {"text": "🖥️ Monitoramento", "callback_data": "menu_monitoramento"},
+            {"text": "🔒 Segurança",     "callback_data": "menu_seguranca"},
+        ],
+        [
+            {"text": "📦 Instalações",   "callback_data": "menu_instalar"},
+            {"text": "⚙️ Manutenção",   "callback_data": "menu_manutencao"},
+        ],
+    ]
+    send_buttons(chat_id,
         f"👋 Olá, *{name}*! Sou o bot do servidor.\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🖥️ *MONITORAMENTO*\n"
-        "/status — CPU, RAM, disco e uptime\n"
-        "/servicos — Status dos serviços\n"
-        "/processos — Top processos por CPU e RAM\n"
-        "/rede — IP público, interfaces e portas\n"
-        "/ping `<host>` — Ping e rota com 5 saltos\n"
-        "/dns `<dominio>` — Consulta registros DNS\n"
-        "/disco — Uso detalhado de disco\n"
-        "/logs — Logs do sistema\n"
-        "/erros — Últimos erros do sistema\n"
-        "/docker — Status dos containers Docker\n\n"
-        "🔒 *SEGURANÇA*\n"
-        "/seguranca — Menu de segurança\n"
-        "/fail2ban — Relatório do Fail2Ban\n"
-        "/banned — IPs banidos agora\n"
-        "/unban `<ip>` — Desbanir um IP\n"
-        "/firewall — Gerenciar firewall\n\n"
-        "📦 *INSTALAÇÕES*\n"
-        "/instalar — Instalar aplicações\n\n"
-        "⚙️ *MANUTENÇÃO*\n"
-        "/atualizacoes — Pacotes pendentes de update\n"
-        "/controle — Controlar serviços\n"
-        "/atualizar — Atualizar pacotes\n"
-        "/reboot — Reiniciar o servidor\n"
+        "Escolha uma opção:\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📊 _Relatório diário automático às 08h._\n"
-        f"⚠️ _Alertas de CPU e disco acima de {CPU_ALERT_THRESHOLD}%._"
+        f"⚠️ _Alertas de CPU e disco acima de {CPU_ALERT_THRESHOLD}%._",
+        buttons
     )
-    send(chat_id, msg)
 
 
 def cmd_status(chat_id):
@@ -637,6 +661,9 @@ def cmd_seguranca(chat_id):
             {"text": "🔓 Desbanir IP", "callback_data": "seg_unban"},
             {"text": "🛡️ Firewall",   "callback_data": "seg_firewall"},
         ],
+        [
+            {"text": "🏠 Menu Principal", "callback_data": "cmd_start"},
+        ],
     ]
     send_buttons(chat_id,
         "🔒 *Menu de Segurança*\n\n"
@@ -757,6 +784,29 @@ def handle_port_input(chat_id, text):
         run(f"ufw delete allow {port}/{proto}")
         send(chat_id, f"✅ Porta `{port}/{proto}` *fechada* no firewall.")
         logging.info(f"Firewall: porta {port}/{proto} fechada por {chat_id}")
+
+
+# ─── Manutenção — Menu ─────────────────────────────────────────────────────────
+
+def cmd_manutencao(chat_id):
+    buttons = [
+        [
+            {"text": "📦 Atualizações",  "callback_data": "man_atualizacoes"},
+            {"text": "⚙️ Controle",     "callback_data": "man_controle"},
+        ],
+        [
+            {"text": "🔄 Atualizar",     "callback_data": "man_atualizar"},
+            {"text": "🔌 Reboot",       "callback_data": "man_reboot"},
+        ],
+        [
+            {"text": "🏠 Menu Principal", "callback_data": "cmd_start"},
+        ],
+    ]
+    send_buttons(chat_id,
+        "⚙️ *Menu de Manutenção*\n\n"
+        "Escolha uma opção:",
+        buttons
+    )
 
 
 # ─── Manutenção ────────────────────────────────────────────────────────────────
@@ -1565,6 +1615,37 @@ def handle_callback(callback):
             "_Exemplo: `/unban 192.168.1.100`_"
         )
     elif data == "seg_firewall":            cmd_firewall(chat_id)
+    elif data == "mon_status":              cmd_status(chat_id)
+    elif data == "mon_servicos":            cmd_servicos(chat_id)
+    elif data == "mon_processos":           cmd_processos(chat_id)
+    elif data == "mon_rede":                cmd_rede(chat_id)
+    elif data == "mon_ping":
+        send(chat_id,
+            "📡 *Ping & Rota*\n\n"
+            "Use o comando:\n"
+            "`/ping <host>`\n\n"
+            "_Exemplo: `/ping google.com` ou `/ping 8.8.8.8`_"
+        )
+    elif data == "mon_dns":
+        send(chat_id,
+            "🔍 *Consulta DNS*\n\n"
+            "Use o comando:\n"
+            "`/dns <dominio>`\n\n"
+            "_Exemplo: `/dns google.com`_"
+        )
+    elif data == "mon_disco":               cmd_disco(chat_id)
+    elif data == "mon_logs":                cmd_logs(chat_id)
+    elif data == "mon_erros":               cmd_erros(chat_id)
+    elif data == "mon_docker":              cmd_docker(chat_id)
+    elif data == "man_atualizacoes":        cmd_atualizacoes(chat_id)
+    elif data == "man_controle":            cmd_controle_servicos(chat_id)
+    elif data == "man_atualizar":           cmd_atualizar(chat_id)
+    elif data == "man_reboot":              cmd_reboot(chat_id)
+    elif data == "menu_monitoramento":      cmd_monitoramento(chat_id)
+    elif data == "menu_seguranca":          cmd_seguranca(chat_id)
+    elif data == "menu_instalar":           cmd_instalar(chat_id)
+    elif data == "menu_manutencao":         cmd_manutencao(chat_id)
+    elif data == "cmd_start":               cmd_start(chat_id, {})
     elif data == "logs_auth":               cb_logs(chat_id, "auth")
     elif data == "logs_syslog":             cb_logs(chat_id, "syslog")
     elif data == "logs_dmesg":              cb_logs(chat_id, "dmesg")
@@ -1692,6 +1773,8 @@ def handle(message):
     logging.info(f"Comando recebido: {text} de {chat_id}")
 
     if   cmd in ("start", "menu"):  cmd_start(chat_id, user)
+    elif cmd == "monitoramento":    cmd_monitoramento(chat_id)
+    elif cmd == "manutencao":       cmd_manutencao(chat_id)
     elif cmd == "status":           cmd_status(chat_id)
     elif cmd == "servicos":         cmd_servicos(chat_id)
     elif cmd == "processos":        cmd_processos(chat_id)
