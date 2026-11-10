@@ -127,6 +127,28 @@ def run(cmd):
         return str(e)
 
 
+def instalar_via_script(url, nome, timeout=1800, args=()):
+    """Baixa o instalador para /tmp e so entao executa.
+
+    Evita o padrao 'curl | sh' (executa qualquer coisa que o servidor devolver,
+    inclusive resposta de erro) e permite validar que o corpo baixado e um script.
+    Retorna (ok, saida).
+    """
+    destino = os.path.join("/tmp", nome)
+    try:
+        r = subprocess.run(["curl", "-fsSL", "--max-time", "180", "-o", destino, url],
+                           capture_output=True, text=True, timeout=200, stdin=subprocess.DEVNULL)
+        if r.returncode != 0:
+            return False, f"download falhou: {(r.stderr or '').strip()[:300]}"
+        if not os.path.isfile(destino) or os.path.getsize(destino) < 200:
+            return False, "conteudo baixado vazio ou invalido (abortado)"
+        r2 = subprocess.run(["bash", destino, *args],
+                            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+        return r2.returncode == 0, (r2.stdout or "") + (r2.stderr or "")
+    except Exception as e:
+        return False, str(e)
+
+
 def run_args(args, timeout=15):
     """Executa sem shell: lista de argumentos, sem interpretacao de metacaracteres."""
     try:
@@ -1091,11 +1113,8 @@ def cb_easypanel_info(chat_id):
 def _run_easypanel_install(chat_id):
     logging.info(f"Iniciando instalação do EasyPanel (chat_id={chat_id})")
     try:
-        result = subprocess.run(
-            "curl -sSL https://get.easypanel.io | sh",
-            shell=True, capture_output=True, text=True, timeout=2700
-        )
-        if result.returncode == 0:
+        ok_inst, saida = instalar_via_script("https://get.easypanel.io", "easypanel.sh", timeout=2700)
+        if ok_inst:
             send(chat_id,
                 "✅ *EasyPanel instalado com sucesso!*\n\n"
                 "Acesse o painel pelo navegador:\n"
@@ -1105,8 +1124,7 @@ def _run_easypanel_install(chat_id):
             )
             logging.info("EasyPanel instalado com sucesso.")
         else:
-            erro = (result.stderr or result.stdout or "Sem detalhes.")[-2000:]
-            send(chat_id, f"❌ *Erro na instalação do EasyPanel*\n\nCódigo: `{result.returncode}`\n\n```\n{erro}\n```")
+            send(chat_id, f"❌ *Erro na instalação do EasyPanel*\n\n```\n{(saida or 'Sem detalhes.')[-2000:]}\n```")
     except subprocess.TimeoutExpired:
         send(chat_id, "⏱️ *Timeout* — A instalação excedeu 45 minutos e foi interrompida.")
     except Exception as e:
@@ -1155,11 +1173,8 @@ def cb_coolify_info(chat_id):
 def _run_coolify_install(chat_id):
     logging.info(f"Iniciando instalação do Coolify (chat_id={chat_id})")
     try:
-        result = subprocess.run(
-            "curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash",
-            shell=True, capture_output=True, text=True, timeout=2700
-        )
-        if result.returncode == 0:
+        ok_inst, saida = instalar_via_script("https://cdn.coollabs.io/coolify/install.sh", "coolify.sh", timeout=2700)
+        if ok_inst:
             send(chat_id,
                 "✅ *Coolify instalado com sucesso!*\n\n"
                 "Acesse o painel pelo navegador:\n"
@@ -1169,9 +1184,8 @@ def _run_coolify_install(chat_id):
             )
             logging.info("Coolify instalado com sucesso.")
         else:
-            erro = (result.stderr or result.stdout or "Sem detalhes.")[-2000:]
-            send(chat_id, f"❌ *Erro na instalação do Coolify*\n\nCódigo: `{result.returncode}`\n\n```\n{erro}\n```")
-            logging.error(f"Erro Coolify (código {result.returncode}): {result.stderr[:300]}")
+            send(chat_id, f"❌ *Erro na instalação do Coolify*\n\n```\n{(saida or 'Sem detalhes.')[-2000:]}\n```")
+            logging.error(f"Erro Coolify: {(saida or '')[:300]}")
     except subprocess.TimeoutExpired:
         send(chat_id, "⏱️ *Timeout* — A instalação excedeu 45 minutos e foi interrompida.")
         logging.error("Timeout na instalação do Coolify")
@@ -1222,16 +1236,10 @@ def cb_aapanel_info(chat_id):
 def _run_aapanel_install(chat_id):
     logging.info(f"Iniciando instalação do aaPanel (chat_id={chat_id})")
     try:
-        cmd = (
-            "URL=https://www.aapanel.com/script/install_panel_en.sh && "
-            "if [ -f /usr/bin/curl ]; then curl -ksSO $URL; "
-            "else wget --no-check-certificate -O install_panel_en.sh $URL; fi && "
-            "bash install_panel_en.sh ipssl"
-        )
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=1800)
-        if result.returncode == 0:
-            # Extrai credenciais do output se disponíveis
-            out = result.stdout
+        ok_inst, saida = instalar_via_script("https://www.aapanel.com/script/install_panel_en.sh",
+                                             "install_panel_en.sh", timeout=1800, args=("ipssl",))
+        if ok_inst:
+            out   = saida
             creds = ""
             for line in out.splitlines():
                 if any(k in line.lower() for k in ["address", "username", "password", "panel", "http"]):
@@ -1244,9 +1252,8 @@ def _run_aapanel_install(chat_id):
             )
             logging.info("aaPanel instalado com sucesso.")
         else:
-            erro = (result.stderr or result.stdout or "Sem detalhes.")[-2000:]
-            send(chat_id, f"❌ *Erro na instalação do aaPanel*\n\nCódigo: `{result.returncode}`\n\n```\n{erro}\n```")
-            logging.error(f"Erro aaPanel (código {result.returncode}): {result.stderr[:300]}")
+            send(chat_id, f"❌ *Erro na instalação do aaPanel*\n\n```\n{(saida or 'Sem detalhes.')[-2000:]}\n```")
+            logging.error("Erro aaPanel: " + (saida or "")[:300])
     except subprocess.TimeoutExpired:
         send(chat_id, "⏱️ *Timeout* — A instalação excedeu 30 minutos e foi interrompida.")
         logging.error("Timeout na instalação do aaPanel")
@@ -1296,15 +1303,10 @@ def cb_aaclaw_info(chat_id):
 def _run_aaclaw_install(chat_id):
     logging.info(f"Iniciando instalação do aaPanel + OpenClaw (chat_id={chat_id})")
     try:
-        cmd = (
-            "URL=https://www.aapanel.com/script/aaClaw.sh && "
-            "if [ -f /usr/bin/curl ]; then curl -ksSO $URL; "
-            "else wget --no-check-certificate -O aaClaw.sh $URL; fi && "
-            "bash aaClaw.sh 9e7f1eae"
-        )
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=1800)
-        if result.returncode == 0:
-            out   = result.stdout
+        ok_inst, saida = instalar_via_script("https://www.aapanel.com/script/aaClaw.sh",
+                                             "aaClaw.sh", timeout=1800, args=("9e7f1eae",))
+        if ok_inst:
+            out   = saida
             creds = ""
             for line in out.splitlines():
                 if any(k in line.lower() for k in ["address", "username", "password", "panel", "http"]):
@@ -1317,9 +1319,8 @@ def _run_aaclaw_install(chat_id):
             )
             logging.info("aaPanel + OpenClaw instalado com sucesso.")
         else:
-            erro = (result.stderr or result.stdout or "Sem detalhes.")[-2000:]
-            send(chat_id, f"❌ *Erro na instalação do aaPanel + OpenClaw*\n\nCódigo: `{result.returncode}`\n\n```\n{erro}\n```")
-            logging.error(f"Erro aaClaw (código {result.returncode}): {result.stderr[:300]}")
+            send(chat_id, f"❌ *Erro na instalação do aaPanel + OpenClaw*\n\n```\n{(saida or 'Sem detalhes.')[-2000:]}\n```")
+            logging.error("Erro aaClaw: " + (saida or "")[:300])
     except subprocess.TimeoutExpired:
         send(chat_id, "⏱️ *Timeout* — A instalação excedeu 30 minutos e foi interrompida.")
         logging.error("Timeout na instalação do aaPanel + OpenClaw")
@@ -1458,9 +1459,9 @@ def cb_cloudpanel_go(chat_id, engine):
 
 
 OPENCLAW_METHODS = {
-    "quickstart": ("🚀 Quick Start",  "curl -fsSL https://openclaw.ai/install.sh | bash"),
+    "quickstart": ("🚀 Quick Start",  "script oficial"),
     "npm":        ("📦 npm",          "npm i -g openclaw && openclaw onboard"),
-    "hackable":   ("🔧 Hackable (git)","curl -fsSL https://openclaw.ai/install.sh | bash -s -- --install-method git"),
+    "hackable":   ("🔧 Hackable (git)","script oficial, metodo git"),
 }
 
 def cb_openclaw_info(chat_id):
@@ -1485,11 +1486,19 @@ def cb_openclaw_info(chat_id):
     send_buttons(chat_id, msg, buttons)
 
 def _run_openclaw_install(chat_id, method):
-    label, cmd = OPENCLAW_METHODS[method]
+    label, _ = OPENCLAW_METHODS[method]
     logging.info(f"Instalando OpenClaw método={method} (chat_id={chat_id})")
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300)
-        if result.returncode == 0:
+        if method == "npm":
+            rn = subprocess.run(["npm", "i", "-g", "openclaw"], capture_output=True,
+                                text=True, timeout=600, stdin=subprocess.DEVNULL)
+            ok_inst, saida = (rn.returncode == 0), (rn.stdout or "") + (rn.stderr or "")
+        elif method == "hackable":
+            ok_inst, saida = instalar_via_script("https://openclaw.ai/install.sh", "openclaw.sh",
+                                                 timeout=300, args=("--install-method", "git"))
+        else:
+            ok_inst, saida = instalar_via_script("https://openclaw.ai/install.sh", "openclaw.sh", timeout=300)
+        if ok_inst:
             extra = "\nRode `openclaw onboard` no terminal para configurar." if method == "npm" else ""
             send(chat_id,
                 f"✅ *OpenClaw instalado com sucesso! ({label})*\n\n"
@@ -1543,11 +1552,8 @@ def cb_woncode_info(chat_id):
 def _run_woncode_install(chat_id):
     logging.info(f"Instalando Won Code (chat_id={chat_id})")
     try:
-        result = subprocess.run(
-            "curl -sSL https://install.woncode.com.br | sh",
-            shell=True, capture_output=True, text=True, timeout=300
-        )
-        if result.returncode == 0:
+        ok_inst, saida = instalar_via_script("https://install.woncode.com.br", "woncode.sh", timeout=300)
+        if ok_inst:
             send(chat_id,
                 "✅ *Won Code instalado com sucesso!*\n\n"
                 "📋 *Próximos passos no terminal:*\n\n"
