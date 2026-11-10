@@ -2,7 +2,7 @@
 
 > **Gerencie seu servidor Linux direto pelo Telegram — sem acessar terminal.**
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python&logoColor=white)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)](https://python.org)
 [![Telegram Bot API](https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/bots/api)
 [![License](https://img.shields.io/badge/Licença-MIT-green)](LICENSE)
 [![Won Ecosystem](https://img.shields.io/badge/Won-Ecosystem-orange)](https://wonecosystem.com.br)
