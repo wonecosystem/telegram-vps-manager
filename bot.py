@@ -600,12 +600,12 @@ def cmd_dns(chat_id, domain):
 
     def fmt(label, raw):
         if not raw:
-            return f"  _nenhum registro_"
+            return "  _nenhum registro_"
         lines = []
         for line in raw.splitlines():
             parts = line.split()
             if len(parts) >= 5:
-                ttl, rtype, value = parts[1], parts[3], " ".join(parts[4:])
+                ttl, _rtype, value = parts[1], parts[3], " ".join(parts[4:])
                 lines.append(f"  `{value}` _(TTL {ttl}s)_")
             else:
                 lines.append(f"  `{line}`")
@@ -1430,7 +1430,7 @@ def cb_cloudpanel_confirm(chat_id, engine):
         "_Este processo pode levar 10 a 20 minutos._"
     )
     buttons = [[
-        {"text": f"✅ Confirmar",  "callback_data": f"cp_confirm_{engine}"},
+        {"text": "✅ Confirmar",  "callback_data": f"cp_confirm_{engine}"},
         {"text": "◀️ Voltar",     "callback_data": "install_cloudpanel_info"},
     ]]
     send_buttons(chat_id, msg, buttons)
@@ -1444,8 +1444,8 @@ def _run_cloudpanel_install(chat_id, engine):
             shell=True, capture_output=True, text=True, timeout=600
         )
         send(chat_id, "⏳ *Baixando e verificando instalador...*")
-        dl = subprocess.run(
-            "curl -sS https://installer.cloudpanel.io/ce/v2/install.sh -o /tmp/cp_install.sh",
+        subprocess.run(
+            "curl -fsS https://installer.cloudpanel.io/ce/v2/install.sh -o /tmp/cp_install.sh",
             shell=True, capture_output=True, text=True, timeout=60
         )
         verify = subprocess.run(
@@ -1547,8 +1547,7 @@ def _run_openclaw_install(chat_id, method):
             )
             logging.info(f"OpenClaw ({method}) instalado com sucesso.")
         else:
-            erro = (result.stderr or result.stdout or "Sem detalhes.")[-1500:]
-            send(chat_id, f"❌ *Erro na instalação do OpenClaw*\n\nCódigo: `{result.returncode}`\n\n```\n{erro}\n```")
+            send(chat_id, f"❌ *Erro na instalação do OpenClaw*\n\n```\n{(saida or 'Sem detalhes.')[-1500:]}\n```")
     except subprocess.TimeoutExpired:
         send(chat_id, "⏱️ *Timeout* — A instalação demorou mais de 5 minutos.")
     except Exception as e:
@@ -1605,8 +1604,7 @@ def _run_woncode_install(chat_id):
             )
             logging.info("Won Code instalado com sucesso.")
         else:
-            erro = (result.stderr or result.stdout or "Sem detalhes.")[-1500:]
-            send(chat_id, f"❌ *Erro na instalação do Won Code*\n\nCódigo: `{result.returncode}`\n\n```\n{erro}\n```")
+            send(chat_id, f"❌ *Erro na instalação do Won Code*\n\n```\n{(saida or 'Sem detalhes.')[-1500:]}\n```")
     except subprocess.TimeoutExpired:
         send(chat_id, "⏱️ *Timeout* — A instalação demorou mais de 5 minutos.")
     except Exception as e:
