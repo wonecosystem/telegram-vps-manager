@@ -11,7 +11,7 @@ import threading
 from datetime import datetime
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+CONFIG_FILE = os.environ.get("WONCLOUD_BOT_CONFIG") or os.path.join(BASE_DIR, "config.json")
 
 # ─── Config ────────────────────────────────────────────────────────────────────
 
@@ -38,11 +38,14 @@ CPU_ALERT_THRESHOLD  = cfg.get("cpu_alert_threshold", 80)
 DISK_ALERT_THRESHOLD = cfg.get("disk_alert_threshold", 80)
 MONITOR_INTERVAL     = cfg.get("monitor_interval", 300)
 
-logging.basicConfig(
-    filename=os.path.join(BASE_DIR, "bot.log"),
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s"
+from logging.handlers import RotatingFileHandler
+
+_log_handler = RotatingFileHandler(
+    os.path.join(BASE_DIR, "bot.log"),
+    maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
 )
+_log_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+logging.basicConfig(level=logging.INFO, handlers=[_log_handler])
 
 # ─── Telegram helpers ──────────────────────────────────────────────────────────
 
@@ -119,12 +122,48 @@ def set_commands():
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
+def host_valido(host):
+    """Dominio ou IPv4 simples; sem espaco, sem metacaractere de shell."""
+    return bool(re.match(r"^[a-zA-Z0-9][a-zA-Z0-9\.\-]{0,252}$", (host or "").strip()))
+
+
+def ip_valido(ip):
+    """IPv4 em formato decimal pontuado."""
+    m = re.match(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", (ip or "").strip())
+    if not m:
+        return False
+    return all(0 <= int(octeto) <= 255 for octeto in m.groups())
+
+
+def porta_valida(texto):
+    """Devolve (porta, proto) ou None. Aceita '80', '443/tcp', '53/udp'."""
+    m = re.match(r"^(\d+)(?:/(tcp|udp))?$", (texto or "").strip().lstrip("/").lower())
+    if not m:
+        return None
+    porta = int(m.group(1))
+    if not 1 <= porta <= 65535:
+        return None
+    return porta, (m.group(2) or "tcp")
+
+
+def autorizado(chat_id, autorizado_id):
+    """Fail-closed: sem pareamento gravado, nada e autorizado."""
+    return bool(autorizado_id) and chat_id == autorizado_id
+
+
 def run(cmd):
     """Comando fixo com pipe/redirecionamento (sem entrada de usuario)."""
     try:
-        return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15).stdout
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
+        if r.returncode != 0 and not r.stdout:
+            logging.warning(f"run falhou (codigo {r.returncode}): {cmd[:80]} | {(r.stderr or '')[:200]}")
+        return r.stdout or ""
+    except subprocess.TimeoutExpired:
+        logging.warning(f"run timeout: {cmd[:80]}")
+        return ""
     except Exception as e:
-        return str(e)
+        logging.error(f"run erro: {cmd[:80]}: {e}")
+        return ""
 
 
 def instalar_via_script(url, nome, timeout=1800, args=()):
@@ -153,9 +192,18 @@ def run_args(args, timeout=15):
     """Executa sem shell: lista de argumentos, sem interpretacao de metacaracteres."""
     try:
         r = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        if r.returncode != 0 and not (r.stdout or "").strip():
+            logging.warning(f"run_args falhou ({r.returncode}): {' '.join(args)[:80]} | {(r.stderr or '')[:200]}")
         return (r.stdout or "") + (r.stderr or "")
+    except subprocess.TimeoutExpired:
+        logging.warning(f"run_args timeout: {' '.join(args)[:80]}")
+        return ""
+    except FileNotFoundError:
+        logging.warning(f"run_args: comando nao encontrado: {args[0]}")
+        return ""
     except Exception as e:
-        return str(e)
+        logging.error(f"run_args erro: {args[0]}: {e}")
+        return ""
 
 def now():
     return datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -509,8 +557,7 @@ def cmd_ping(chat_id, host):
     if not host:
         send(chat_id, "⚠️ Use: `/ping google.com` ou `/ping 8.8.8.8`")
         return
-    # Valida host: domínio ou IP
-    if not re.match(r"^[a-zA-Z0-9\.\-]+$", host):
+    if not host_valido(host):
         send(chat_id, "⚠️ Host inválido.")
         return
     send(chat_id, f"📡 *Testando rota para `{host}`...*")
@@ -536,7 +583,7 @@ def cmd_dns(chat_id, domain):
     if not domain:
         send(chat_id, "⚠️ Use: `/dns woncloud.com.br` ou `/dns google.com`")
         return
-    if not re.match(r"^[a-zA-Z0-9\.\-]+$", domain):
+    if not host_valido(domain):
         send(chat_id, "⚠️ Domínio inválido.")
         return
     send(chat_id, f"🔍 *Consultando DNS para `{domain}`...*")
@@ -686,7 +733,7 @@ def cmd_unban(chat_id, ip):
     if not is_installed("fail2ban"):
         _fail2ban_not_installed(chat_id)
         return
-    if not ip or not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+    if not ip_valido(ip):
         send(chat_id, "⚠️ Use: `/unban 1.2.3.4`")
         return
     jails    = get_active_jails()
@@ -812,17 +859,11 @@ def handle_port_input(chat_id, text):
         send(chat_id, "❌ Operação cancelada.")
         return
 
-    match = re.match(r"^(\d+)(?:/(tcp|udp))?$", text.strip())
-    if not match:
-        send(chat_id, "⚠️ Formato inválido. Use `80`, `443` ou `8080/tcp`.")
+    parsed = porta_valida(text)
+    if not parsed:
+        send(chat_id, "⚠️ Formato inválido. Use `80`, `443` ou `8080/tcp` (porta entre 1 e 65535).")
         return
-
-    port  = int(match.group(1))
-    proto = match.group(2) or "tcp"
-
-    if port < 1 or port > 65535:
-        send(chat_id, "⚠️ Porta inválida. Use um valor entre 1 e 65535.")
-        return
+    port, proto = parsed
 
     if action == "close" and port == SSH_PORT:
         send(chat_id, f"🔒 A porta `{SSH_PORT}` (SSH) não pode ser fechada por segurança.")
