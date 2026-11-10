@@ -54,7 +54,31 @@ logging.basicConfig(level=logging.INFO, handlers=[_log_handler])
 
 # ─── Telegram helpers ──────────────────────────────────────────────────────────
 
+LIMITE_TELEGRAM = 4000   # o limite real e 4096; margem para o parse_mode
+
+
+def dividir_mensagem(texto, limite=LIMITE_TELEGRAM):
+    """Quebra o texto em partes respeitando o limite do Telegram, sem cortar linha."""
+    partes, atual = [], ""
+    for linha in texto.splitlines(keepends=True):
+        if len(atual) + len(linha) > limite and atual:
+            partes.append(atual)
+            atual = ""
+        # linha sozinha maior que o limite: corta em bloco duro
+        while len(linha) > limite:
+            partes.append(linha[:limite])
+            linha = linha[limite:]
+        atual += linha
+    if atual:
+        partes.append(atual)
+    return partes
+
+
 def send(chat_id, text, parse_mode="Markdown"):
+    if len(text) > LIMITE_TELEGRAM:
+        for parte in dividir_mensagem(text):
+            send(chat_id, parte, parse_mode)
+        return
     try:
         r = requests.post(f"{API}/sendMessage", data={
             "chat_id": chat_id,
@@ -606,7 +630,11 @@ def cmd_processos(chat_id):
 def cmd_rede(chat_id):
     pub_ip     = run("curl -s --max-time 5 ifconfig.me || curl -s --max-time 5 icanhazip.com").strip()
     interfaces = run("ip -br addr show").strip()
-    ports      = run("ss -tlnp | awk 'NR>1 {print $1, $4, $6}' | column -t").strip()
+    # sem -p: a lista com PID/processo de cada socket passava de 6 mil caracteres
+    linhas_ss  = [l for l in run("ss -tln").splitlines()[1:] if l.strip()]
+    ports      = "\n".join(f"{l.split()[0]:8} {l.split()[3]}" for l in linhas_ss[:25])
+    if len(linhas_ss) > 25:
+        ports += f"\n… e mais {len(linhas_ss) - 25} portas"
     msg = (
         f"🌐 *Rede*\n📅 {now()}\n\n"
         f"🔌 *IP Público:* `{pub_ip or 'não detectado'}`\n\n"

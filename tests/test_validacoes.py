@@ -98,3 +98,27 @@ class TestBackup:
         arquivos = sorted((tmp_path / "bkp").glob("woncloud-*.tar.gz"))
         assert len(arquivos) == 5, "retencao deve manter os 5 mais recentes"
         assert "Backup criado" in enviadas[-1]
+
+
+class TestDividirMensagem:
+    def test_texto_curto_fica_inteiro(self):
+        assert bot.dividir_mensagem("oi", 1000) == ["oi"]
+
+    def test_respeita_limite_e_preserva_conteudo(self):
+        texto = "\n".join(f"linha {i} " + "x" * 80 for i in range(80))
+        partes = bot.dividir_mensagem(texto, 1000)
+        assert all(len(p) <= 1000 for p in partes)
+        assert "".join(partes) == texto
+        assert len(partes) > 1
+
+    def test_linha_maior_que_o_limite(self):
+        texto = "x" * 2500
+        partes = bot.dividir_mensagem(texto, 1000)
+        assert all(len(p) <= 1000 for p in partes)
+        assert "".join(partes) == texto
+
+    def test_caso_real_do_rede_6300_caracteres(self):
+        texto = "\n".join(["LISTEN   0   4096   127.0.0.1:8084   0.0.0.0:*"] * 150)
+        partes = bot.dividir_mensagem(texto)
+        assert all(len(p) <= bot.LIMITE_TELEGRAM for p in partes)
+        assert "".join(partes) == texto
