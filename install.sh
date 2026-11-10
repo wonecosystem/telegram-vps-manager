@@ -76,7 +76,7 @@ ok "venv criado em $VENV_DIR"
 
 echo "▶ Instalando dependências Python (requests)..."
 $PIP install --quiet --upgrade pip
-$PIP install --quiet requests
+$PIP install --quiet -r "$SCRIPT_DIR/requirements.txt" 2>/dev/null || $PIP install --quiet requests
 ok "requests instalado"
 
 # ─── 4. Configuração do bot ───────────────────────────────────────────────────
