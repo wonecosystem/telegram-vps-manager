@@ -87,6 +87,9 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 CONFIG_FILE="$INSTALL_DIR/config.json"
 
+# Codigo de pareamento: exibido uma unica vez, exigido no primeiro /start
+PAIR_CODE=$(openssl rand -hex 3 2>/dev/null || tr -dc 'a-f0-9' < /dev/urandom | head -c 6)
+
 # Preserva config existente se já tiver token
 if [ -f "$CONFIG_FILE" ] && grep -q '"token"' "$CONFIG_FILE"; then
     warn "config.json já existe. Mantendo configuração atual."
@@ -94,6 +97,17 @@ if [ -f "$CONFIG_FILE" ] && grep -q '"token"' "$CONFIG_FILE"; then
     if [ -n "$EXISTING_TOKEN" ]; then
         ok "Token existente preservado."
         TOKEN="$EXISTING_TOKEN"
+    fi
+    # Config antigo sem pareamento: gera codigo para o primeiro /start
+    NEEDS_PAIR=$(python3 -c "import json;c=json.load(open('$CONFIG_FILE'));print('1' if not c.get('chat_id') and not c.get('pair_code') else '0')" 2>/dev/null)
+    if [ "$NEEDS_PAIR" = "1" ]; then
+        python3 -c "
+import json
+c = json.load(open('$CONFIG_FILE'))
+c['pair_code'] = '$PAIR_CODE'
+json.dump(c, open('$CONFIG_FILE','w'), indent=2)
+"
+        ok "Código de pareamento gerado para config existente."
     fi
 fi
 
@@ -114,7 +128,8 @@ if [ -z "$TOKEN" ]; then
   "cpu_alert_threshold": $CPU_THRESHOLD,
   "disk_alert_threshold": $DISK_THRESHOLD,
   "monitor_interval": 300,
-  "repo_dir": "$SCRIPT_DIR"
+  "repo_dir": "$SCRIPT_DIR",
+  "pair_code": "$PAIR_CODE"
 }
 EOF
     ok "config.json criado"
@@ -204,6 +219,9 @@ echo "  Config:      $CONFIG_FILE"
 echo "  Logs:        $INSTALL_DIR/bot.log"
 echo "  Relatório:   $INSTALL_DIR/report.log"
 echo ""
-echo "  ➡  Abra o Telegram e envie /start para o bot"
-echo "     para registrar seu Chat ID."
+echo "  ➡  Abra o Telegram e envie:"
+echo -e "     ${GREEN}/start ${PAIR_CODE}${NC}"
+echo "     (o código acima pareia o seu usuário com o bot)"
+echo ""
+echo "     Alternativa: adicione \"chat_id\": <seu_id> no config.json"
 echo ""

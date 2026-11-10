@@ -32,6 +32,7 @@ if not TOKEN:
 API = f"https://api.telegram.org/bot{TOKEN}"
 
 AUTHORIZED_CHAT_ID   = cfg.get("chat_id")
+PAIR_CODE            = cfg.get("pair_code")   # gerado pelo install.sh; consumido no primeiro /start
 CPU_ALERT_THRESHOLD  = cfg.get("cpu_alert_threshold", 80)
 DISK_ALERT_THRESHOLD = cfg.get("disk_alert_threshold", 80)
 MONITOR_INTERVAL     = cfg.get("monitor_interval", 300)
@@ -171,14 +172,32 @@ def cmd_monitoramento(chat_id):
 
 # ─── Monitoramento ─────────────────────────────────────────────────────────────
 
-def cmd_start(chat_id, user):
-    global AUTHORIZED_CHAT_ID
+def cmd_start(chat_id, user, args=None):
+    global AUTHORIZED_CHAT_ID, PAIR_CODE
     config = load_config()
-    if "chat_id" not in config:
+    codigo = (args[0].strip() if args else "")
+
+    if not AUTHORIZED_CHAT_ID:
+        # Primeiro acesso: exige o codigo de pareamento gerado na instalacao.
+        if not PAIR_CODE:
+            send(chat_id, "⚠️ *Bot sem código de pareamento configurado.*\n"
+                          "Rode `bash install.sh` novamente para gerar um.")
+            return
+        if not codigo:
+            send(chat_id, "🔐 *Este bot ainda não está pareado.*\n\n"
+                          "Envie:\n`/start <codigo>`\n\n"
+                          "O código foi exibido ao final da instalação.")
+            return
+        if codigo != PAIR_CODE:
+            logging.warning(f"Pareamento invalido de chat_id {chat_id}")
+            send(chat_id, "❌ Código de pareamento inválido.")
+            return
         config["chat_id"] = chat_id
+        config.pop("pair_code", None)
         save_config(config)
         AUTHORIZED_CHAT_ID = chat_id
-        logging.info(f"Chat ID registrado: {chat_id}")
+        PAIR_CODE = None
+        logging.info(f"Chat ID pareado: {chat_id}")
 
     name = user.get("first_name", "Admin")
     buttons = [
@@ -1785,6 +1804,13 @@ def handle(message):
     if not text:
         return
 
+    # Fail-closed: enquanto nao houver pareamento, apenas /start <codigo> e aceito.
+    if not AUTHORIZED_CHAT_ID:
+        primeiro = text.split()[0].lower().lstrip("/").split("@")[0]
+        if primeiro not in ("start", "menu"):
+            logging.warning(f"Bot sem pareamento: comando '{primeiro}' ignorado de {chat_id}")
+            return
+
     # Captura entrada de porta do firewall
     if chat_id in _awaiting_port:
         logging.info(f"Entrada de porta: '{text}' de {chat_id}")
@@ -1795,7 +1821,7 @@ def handle(message):
     args = text.split()[1:]
     logging.info(f"Comando recebido: {text} de {chat_id}")
 
-    if   cmd in ("start", "menu"):  cmd_start(chat_id, user)
+    if   cmd in ("start", "menu"):  cmd_start(chat_id, user, args)
     elif cmd == "monitoramento":    cmd_monitoramento(chat_id)
     elif cmd == "manutencao":       cmd_manutencao(chat_id)
     elif cmd == "status":           cmd_status(chat_id)
