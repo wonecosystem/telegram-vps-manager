@@ -3,6 +3,8 @@ import subprocess
 import shutil
 import sqlite3
 import glob
+import socket
+import ssl
 import requests
 import time
 import json
@@ -39,6 +41,7 @@ PAIR_CODE            = cfg.get("pair_code")   # gerado pelo install.sh; consumid
 CPU_ALERT_THRESHOLD  = cfg.get("cpu_alert_threshold", 80)
 DISK_ALERT_THRESHOLD = cfg.get("disk_alert_threshold", 80)
 MONITOR_INTERVAL     = cfg.get("monitor_interval", 300)
+CERT_DOMAINS         = cfg.get("cert_domains", [])   # ex.: ["meet.woncode.com.br"]
 
 from logging.handlers import RotatingFileHandler
 
@@ -1087,6 +1090,7 @@ def _run_atualizar_bot(chat_id):
     repo_dir = cfg.get("repo_dir", "/opt/woncloud-bot")
     try:
         send(chat_id, "⏳ *Atualizando repositório...*")
+        sha_antes = run_args(["git", "-C", repo_dir, "rev-parse", "HEAD"]).strip()
         r1 = subprocess.run(["git", "-C", repo_dir, "pull"],
                             capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
 
@@ -1101,8 +1105,16 @@ def _run_atualizar_bot(chat_id):
                 time.sleep(3)
                 subprocess.Popen("systemctl restart woncloud-bot", shell=True)
             else:
-                erro = (r2.stderr or r2.stdout or "Sem detalhes.")[-1500:]
-                send(chat_id, f"❌ *Erro na instalação*\n\n```\n{erro}\n```")
+                erro = (r2.stderr or r2.stdout or "Sem detalhes.")[-1200:]
+                voltou = ""
+                if sha_antes:
+                    subprocess.run(["git", "-C", repo_dir, "reset", "--hard", sha_antes],
+                                   capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+                    subprocess.run(["sudo", "-n", "bash", "install.sh", "--no-restart"], cwd=repo_dir,
+                                   capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
+                    voltou = f"\n\n↩️ *Rollback aplicado* para `{sha_antes[:7]}`."
+                    logging.warning(f"Rollback do bot para {sha_antes}")
+                send(chat_id, f"❌ *Erro na instalação*\n\n```\n{erro}\n```{voltou}")
         else:
             erro = (r1.stderr or r1.stdout or "Sem detalhes.")[-1500:]
             send(chat_id, f"❌ *Erro ao atualizar repositório*\n\n```\n{erro}\n```")
@@ -1863,6 +1875,39 @@ def get_disk_pct():
         pass
     return None
 
+def dias_certificado(dominio):
+    """Dias ate expirar o certificado TLS do dominio (None se nao der para ler)."""
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((dominio, 443), timeout=8) as sock:
+            with ctx.wrap_socket(sock, server_hostname=dominio) as tls_sock:
+                cert = tls_sock.getpeercert()
+        expira = datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z")
+        return (expira - datetime.utcnow()).days
+    except Exception:
+        return None
+
+
+def alertas_extras():
+    """Servicos com falha e certificados prestes a expirar."""
+    avisos = []
+    falhas = run_args(["systemctl", "--failed", "--no-legend", "--no-pager"], timeout=10)
+    nomes = []
+    for linha in falhas.splitlines():
+        campos = linha.split()
+        if len(campos) > 1:
+            nomes.append(campos[1])
+    if nomes:
+        avisos.append("🔴 *Serviços com falha:* " + ", ".join(nomes[:5]))
+    for dominio in CERT_DOMAINS:
+        if not host_valido(dominio):
+            continue
+        dias = dias_certificado(dominio)
+        if dias is not None and dias <= 15:
+            avisos.append(f"🔐 *Certificado de {dominio}* expira em {dias} dias")
+    return avisos
+
+
 def monitor_loop():
     logging.info("Monitor de CPU/disco iniciado.")
     while True:
@@ -1889,8 +1934,87 @@ def monitor_loop():
                         f"💿 Uso atual: *{disk}%* (limite: {DISK_ALERT_THRESHOLD}%)\n\nUse /disco para mais detalhes."
                     )
                     logging.warning(f"Alerta Disco: {disk}%")
+            # servicos e certificados: no maximo a cada 30 min
+            if t - _last_alert.get("extra", 0) > 1800:
+                _last_alert["extra"] = t
+                avisos = alertas_extras()
+                if avisos:
+                    send(AUTHORIZED_CHAT_ID, "🚨 *Alertas do servidor*\n📅 " + now() + "\n\n" + "\n".join(avisos))
+                    logging.warning("Alertas extras enviados: " + " | ".join(avisos))
         except Exception as e:
             logging.error(f"Erro no monitor: {e}")
+
+
+def cmd_backup(chat_id):
+    cfg_atual = load_config()
+    destino = cfg_atual.get("backup_dir", "/var/backups/woncloud")
+    caminhos = cfg_atual.get("backup_paths", ["/etc/nginx", "/etc/systemd/system", CONFIG_FILE])
+    try:
+        os.makedirs(destino, exist_ok=True)
+    except Exception as e:
+        send(chat_id, f"❌ Não consegui criar `{destino}`: `{e}`")
+        return
+    existentes = [c for c in caminhos if os.path.exists(c)]
+    if not existentes:
+        send(chat_id, "⚠️ Nenhum caminho de `backup_paths` existe neste servidor.")
+        return
+    nome = os.path.join(destino, f"woncloud-{datetime.now():%Y%m%d-%H%M%S%f}.tar.gz")
+    r = subprocess.run(["tar", "czf", nome, *existentes],
+                       capture_output=True, text=True, timeout=600, stdin=subprocess.DEVNULL)
+    if r.returncode != 0:
+        send(chat_id, f"❌ *Falha no backup*\n\n```\n{(r.stderr or '')[-800:]}\n```")
+        return
+    tamanho = os.path.getsize(nome) / (1024 * 1024)
+    mantidos = sorted(glob.glob(os.path.join(destino, "woncloud-*.tar.gz")))[:-5]
+    for antigo in mantidos:
+        try:
+            os.remove(antigo)
+        except OSError:
+            pass
+    audit(chat_id, "backup", [nome], f"{tamanho:.1f} MB")
+    send(chat_id, f"✅ *Backup criado*\n📅 {now()}\n\n`{nome}`\n"
+                  f"📦 {tamanho:.1f} MB · 🗂️ {len(existentes)} caminhos\n"
+                  f"♻️ mantidos os 5 mais recentes")
+
+
+def cmd_servidores(chat_id):
+    cfg_atual = load_config()
+    servidores = cfg_atual.get("servidores", [])
+    if not servidores:
+        send(chat_id, "ℹ️ Nenhum servidor adicional configurado.\n\n"
+                      "Adicione no `config.json`:\n"
+                      '```json\n"servidores": [{"nome": "web-01", "host": "1.2.3.4", '
+                      '"porta": 22, "usuario": "root", "chave": "/root/.ssh/id_ed25519"}]\n```')
+        return
+    send(chat_id, f"🛰️ *Consultando {len(servidores)} servidor(es)...*")
+    linhas = []
+    for srv in servidores:
+        nome = srv.get("nome") or srv.get("host", "?")
+        host = srv.get("host", "")
+        if not host_valido(host):
+            linhas.append(f"❌ *{nome}* — host inválido")
+            continue
+        try:
+            porta = int(srv.get("porta", 22))
+            if not porta_valida(str(porta)):
+                raise ValueError
+        except Exception:
+            linhas.append(f"❌ *{nome}* — porta inválida")
+            continue
+        args = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+                "-o", "ConnectTimeout=6", "-p", str(porta)]
+        if srv.get("chave"):
+            args += ["-i", srv["chave"]]
+        args += [f"{srv.get('usuario', 'root')}@{host}",
+                 "uptime -p; df -h / | tail -1; systemctl is-system-running 2>/dev/null"]
+        saida = run_args(args, timeout=20).strip()
+        if not saida:
+            linhas.append(f"⚪ *{nome}* (`{host}`) — sem resposta")
+            continue
+        resumo = " | ".join(p.strip() for p in saida.splitlines()[:3])[:180]
+        linhas.append(f"🟢 *{nome}* (`{host}`)\n   {resumo}")
+    audit(chat_id, "servidores", [len(servidores)])
+    send(chat_id, "🛰️ *Servidores monitorados*\n📅 " + now() + "\n\n" + "\n".join(linhas))
 
 
 def cmd_auditoria(chat_id):
@@ -1962,6 +2086,8 @@ def handle(message):
     elif cmd == "reboot":           cmd_reboot(chat_id)
     elif cmd == "relatorio":       cmd_relatorio(chat_id)
     elif cmd == "auditoria":       cmd_auditoria(chat_id)
+    elif cmd == "backup":          cmd_backup(chat_id)
+    elif cmd == "servidores":      cmd_servidores(chat_id)
     elif cmd == "confirmarreboot":  cmd_confirmar_reboot(chat_id)
     elif cmd == "cancelar":
         _awaiting_port.pop(chat_id, None)

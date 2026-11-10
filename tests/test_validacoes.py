@@ -68,3 +68,33 @@ class TestRunArgs:
 
     def test_comando_inexistente_nao_levanta(self):
         assert bot.run_args(["comando-que-nao-existe-xyz"]) == ""
+
+
+class TestBackup:
+    def test_cria_targz_e_mantem_apenas_cinco(self, tmp_path, monkeypatch):
+        import json
+        import os
+        import pathlib
+
+        dados = tmp_path / "dados"
+        dados.mkdir()
+        (dados / "arquivo.txt").write_text("conteudo", encoding="utf-8")
+
+        cfg_path = pathlib.Path(os.environ["WONCLOUD_BOT_CONFIG"])
+        original = cfg_path.read_text(encoding="utf-8")
+        cfg = json.loads(original)
+        cfg["backup_dir"] = str(tmp_path / "bkp")
+        cfg["backup_paths"] = [str(dados)]
+        cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+        enviadas = []
+        monkeypatch.setattr(bot, "send", lambda chat_id, texto, parse_mode="Markdown": enviadas.append(texto))
+        try:
+            for _ in range(7):
+                bot.cmd_backup(1)
+        finally:
+            cfg_path.write_text(original, encoding="utf-8")
+
+        arquivos = sorted((tmp_path / "bkp").glob("woncloud-*.tar.gz"))
+        assert len(arquivos) == 5, "retencao deve manter os 5 mais recentes"
+        assert "Backup criado" in enviadas[-1]
