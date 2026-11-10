@@ -51,11 +51,15 @@ mkdir -p "$INSTALL_DIR"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 for f in bot.py report.py boot_notify.py install.sh; do
-    if [ -f "$SCRIPT_DIR/$f" ]; then
+    if [ ! -f "$SCRIPT_DIR/$f" ]; then
+        err "Arquivo $f não encontrado no diretório atual."
+    fi
+    # instalando de dentro do proprio INSTALL_DIR: cp falharia com "same file"
+    if [ "$(readlink -f "$SCRIPT_DIR/$f")" = "$(readlink -f "$INSTALL_DIR/$f")" ]; then
+        ok "$f já está em $INSTALL_DIR"
+    else
         cp "$SCRIPT_DIR/$f" "$INSTALL_DIR/$f"
         ok "$f copiado"
-    else
-        err "Arquivo $f não encontrado no diretório atual."
     fi
 done
 
