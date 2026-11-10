@@ -9,6 +9,10 @@
 
 ---
 
+> ⚠️ **Pareamento obrigatório:** ao final da instalação o script exibe um código de 6 caracteres.
+> Envie `/start <codigo>` no Telegram para autorizar o seu usuário. Sem esse passo o bot
+> **ignora todos os comandos** (inclusive de quem descobrir o @ dele).
+
 ## 📋 Sobre o Projeto
 
 **Telegram VPS Manager** é um bot para Telegram que permite monitorar e gerenciar servidores Linux (VPS/Dedicados) diretamente pelo celular ou desktop, sem necessidade de cliente SSH ou terminal.
@@ -59,11 +63,15 @@ Desenvolvido com foco em **simplicidade, segurança e praticidade**, ideal para 
 | `/controle` | Controlar serviços (iniciar/parar/reiniciar) |
 | `/atualizar` | Menu para atualizar **Sistema** (apt) ou **Bot** (git + install.sh) |
 | `/reboot` | Reiniciar o servidor com confirmação de segurança |
+| `/auditoria` | Últimos 20 comandos executados (quem, o quê, quando) |
+| `/backup` | tar.gz dos caminhos configurados, mantendo os 5 últimos |
+| `/servidores` | Status dos servidores adicionais configurados |
 
 ### 🔔 Alertas Automáticos
 - Alerta de **CPU alta** quando ultrapassar o limite configurado
 - Alerta de **disco cheio** com percentual atual
 - **Notificação pós-reboot** com status dos serviços
+- Alerta de **serviço em falha** (`systemd --failed`) e **certificado expirando** (≤ 15 dias)
 - **Relatório diário** automático às 08h
 
 ---
@@ -78,6 +86,19 @@ Desenvolvido com foco em **simplicidade, segurança e praticidade**, ideal para 
 - `config.json` com permissão `600` (somente o dono lê)
 
 ---
+
+## ⚙️ Configuração (`config.json`)
+
+| Chave | Para que serve |
+|---|---|
+| `token` | token do bot no @BotFather |
+| `chat_id` | Telegram do dono; preenchido automaticamente pelo `/start <codigo>` |
+| `cpu_alert_threshold` / `disk_alert_threshold` | limites de alerta (%) |
+| `monitor_interval` | segundos entre verificações do monitor |
+| `cert_domains` | domínios cujo certificado TLS será checado (avisa com ≤ 15 dias) |
+| `servidores` | lista `{nome, host, porta, usuario, chave}` para o `/servidores` |
+| `backup_dir` / `backup_paths` | destino e o que entra no `/backup` |
+| `repo_dir` | caminho do clone, usado pelo `/atualizar` |
 
 ## 🚀 Instalação
 

@@ -2,5 +2,9 @@
   "token": "SEU_TOKEN_AQUI",
   "cpu_alert_threshold": 80,
   "disk_alert_threshold": 80,
-  "monitor_interval": 300
+  "monitor_interval": 300,
+  "cert_domains": ["exemplo.com.br"],
+  "servidores": [],
+  "backup_dir": "/var/backups/woncloud",
+  "backup_paths": ["/etc/nginx", "/etc/systemd/system"]
 }
