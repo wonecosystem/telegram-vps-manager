@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import subprocess
 import shutil
+import sqlite3
+import glob
 import requests
 import time
 import json
@@ -186,6 +188,52 @@ def instalar_via_script(url, nome, timeout=1800, args=()):
         return r2.returncode == 0, (r2.stdout or "") + (r2.stderr or "")
     except Exception as e:
         return False, str(e)
+
+
+AUDIT_DB = os.environ.get("WONCLOUD_BOT_AUDIT") or os.path.join(BASE_DIR, "auditoria.db")
+
+
+def audit_init():
+    try:
+        con = sqlite3.connect(AUDIT_DB)
+        con.execute("""CREATE TABLE IF NOT EXISTS comandos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quando TEXT NOT NULL,
+            chat_id INTEGER,
+            comando TEXT,
+            args TEXT,
+            detalhe TEXT
+        )""")
+        con.commit()
+        con.close()
+    except Exception as e:
+        logging.error(f"auditoria: falha ao inicializar: {e}")
+
+
+def audit(chat_id, comando, args=(), detalhe=""):
+    """Registra quem executou o que. Nunca levanta: auditoria nao pode derrubar o bot."""
+    try:
+        con = sqlite3.connect(AUDIT_DB)
+        con.execute(
+            "INSERT INTO comandos (quando, chat_id, comando, args, detalhe) VALUES (?,?,?,?,?)",
+            (datetime.now().isoformat(timespec="seconds"), chat_id, str(comando),
+             " ".join([str(a) for a in args])[:200], str(detalhe)[:500]))
+        con.commit()
+        con.close()
+    except Exception as e:
+        logging.error(f"auditoria: falha ao gravar: {e}")
+
+
+def audit_ultimos(limite=20):
+    try:
+        con = sqlite3.connect(AUDIT_DB)
+        linhas = con.execute(
+            "SELECT quando, chat_id, comando, args FROM comandos ORDER BY id DESC LIMIT ?",
+            (limite,)).fetchall()
+        con.close()
+        return linhas
+    except Exception:
+        return []
 
 
 def run_args(args, timeout=15):
@@ -1845,6 +1893,16 @@ def monitor_loop():
             logging.error(f"Erro no monitor: {e}")
 
 
+def cmd_auditoria(chat_id):
+    linhas = audit_ultimos(20)
+    if not linhas:
+        send(chat_id, "📭 Nenhum comando registrado ainda.")
+        return
+    corpo = "\n".join(
+        f"`{q[11:19]}` · `{c}` {a[:38]} · chat `{cid}`" for q, cid, c, a in linhas)
+    send(chat_id, f"📋 *Auditoria — últimos 20 comandos*\n📅 {now()}\n\n{corpo}")
+
+
 # ─── Router ────────────────────────────────────────────────────────────────────
 
 def handle(message):
@@ -1877,6 +1935,8 @@ def handle(message):
     args = text.split()[1:]
     logging.info(f"Comando recebido: {text} de {chat_id}")
 
+    audit(chat_id, cmd, args)
+
     if   cmd in ("start", "menu"):  cmd_start(chat_id, user, args)
     elif cmd == "monitoramento":    cmd_monitoramento(chat_id)
     elif cmd == "manutencao":       cmd_manutencao(chat_id)
@@ -1901,6 +1961,7 @@ def handle(message):
     elif cmd == "atualizar":        cmd_atualizar(chat_id)
     elif cmd == "reboot":           cmd_reboot(chat_id)
     elif cmd == "relatorio":       cmd_relatorio(chat_id)
+    elif cmd == "auditoria":       cmd_auditoria(chat_id)
     elif cmd == "confirmarreboot":  cmd_confirmar_reboot(chat_id)
     elif cmd == "cancelar":
         _awaiting_port.pop(chat_id, None)
@@ -1913,6 +1974,7 @@ def handle(message):
 
 def main():
     logging.info("Bot iniciado.")
+    audit_init()
     set_commands()
     threading.Thread(target=monitor_loop, daemon=True).start()
 
