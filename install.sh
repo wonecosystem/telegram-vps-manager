@@ -207,7 +207,11 @@ systemctl daemon-reload
 systemctl enable woncloud-bot woncloud-boot-notify
 if [ "$NO_RESTART" != "--no-restart" ]; then
     systemctl restart woncloud-bot &
-    ok "woncloud-bot iniciado"
+    for _ in $(seq 1 10); do
+        systemctl is-active --quiet woncloud-bot && break
+        sleep 1
+    done
+    ok "woncloud-bot iniciado ($(systemctl is-active woncloud-bot))"
 else
     ok "woncloud-bot configurado (restart será feito manualmente)"
 fi

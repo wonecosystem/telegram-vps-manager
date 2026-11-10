@@ -86,13 +86,22 @@ def answer_callback(callback_id, text=""):
     except Exception as e:
         logging.error(f"answer_callback error: {e}")
 
+_ultimo_erro_api = [0.0]
+
+
 def get_updates(offset=None):
     try:
         r = requests.get(f"{API}/getUpdates", params={
             "timeout": 30,
             "offset": offset
         }, timeout=35)
-        return r.json()
+        dados = r.json()
+        if not dados.get("ok"):
+            # token invalido/revogado deixava o bot em silencio absoluto
+            if time.time() - _ultimo_erro_api[0] > 60:
+                _ultimo_erro_api[0] = time.time()
+                logging.error(f"Telegram recusou getUpdates ({r.status_code}): {dados.get('description')}")
+        return dados
     except Exception as e:
         logging.error(f"get_updates error: {e}")
         return {"ok": False, "result": []}
