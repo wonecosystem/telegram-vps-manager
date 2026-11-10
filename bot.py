@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import subprocess
+import shutil
 import requests
 import time
 import json
@@ -119,8 +120,18 @@ def set_commands():
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
 def run(cmd):
+    """Comando fixo com pipe/redirecionamento (sem entrada de usuario)."""
     try:
         return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15).stdout
+    except Exception as e:
+        return str(e)
+
+
+def run_args(args, timeout=15):
+    """Executa sem shell: lista de argumentos, sem interpretacao de metacaracteres."""
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        return (r.stdout or "") + (r.stderr or "")
     except Exception as e:
         return str(e)
 
@@ -130,8 +141,7 @@ def now():
 def is_installed(pkg):
     variants = [pkg, f"{pkg}-client", f"{pkg}-server"]
     for v in variants:
-        r = subprocess.run(f"command -v {v}", shell=True, capture_output=True)
-        if r.returncode == 0:
+        if shutil.which(v):
             return True
     return False
 
@@ -273,7 +283,8 @@ def cmd_servicos(chat_id):
     for svc, label in candidates:
         if svc in seen:
             continue
-        out = run(f"systemctl list-units --full --all --no-pager {svc}.service 2>/dev/null | grep -c '{svc}.service'").strip()
+        out = str(run_args(["systemctl", "list-units", "--full", "--all", "--no-pager",
+                            f"{svc}.service"]).count(f"{svc}.service"))
         if out == "0" or not out:
             continue
         base = label.split()[1]
@@ -281,7 +292,7 @@ def cmd_servicos(chat_id):
             continue
         seen.add(base)
         seen.add(svc)
-        status = run(f"systemctl is-active {svc}").strip()
+        status = run_args(["systemctl", "is-active", svc]).strip()
         icon = "✅" if status == "active" else "❌"
         lines.append(f"{icon} {label}: `{status}`")
         found = True
@@ -318,7 +329,7 @@ def cmd_controle_servicos(chat_id):
             continue
 
         seen.add(svc)
-        status = run(f"systemctl is-active {svc}").strip()
+        status = run_args(["systemctl", "is-active", svc]).strip()
         icon = "🟢" if status == "active" else "🔴"
         lines.append(f"{icon} {emoji} {svc.capitalize()}")
         buttons.append({"text": f"⚙️ {emoji} {svc.capitalize()}", "callback_data": f"svc_menu_{svc}"})
@@ -332,7 +343,7 @@ def cmd_controle_servicos(chat_id):
 
 
 def cb_svc_menu(chat_id, svc):
-    status = run(f"systemctl is-active {svc}").strip()
+    status = run_args(["systemctl", "is-active", svc]).strip()
     icon = "🟢" if status == "active" else "🔴"
 
     msg = f"⚙️ *{svc.capitalize()}*\n\nStatus: {icon} {status.upper()}"
@@ -481,8 +492,8 @@ def cmd_ping(chat_id, host):
         send(chat_id, "⚠️ Host inválido.")
         return
     send(chat_id, f"📡 *Testando rota para `{host}`...*")
-    ping_out = run(f"ping -c 4 -W 2 {host} 2>&1")
-    trace_out = run(f"tracepath -m 5 {host} 2>&1")
+    ping_out = run_args(["ping", "-c", "4", "-W", "2", host])
+    trace_out = run_args(["tracepath", "-m", "5", host])
     if not ping_out and not trace_out:
         send(chat_id, f"❌ Host `{host}` inacessível ou não resolvido.")
         return
@@ -509,7 +520,7 @@ def cmd_dns(chat_id, domain):
     send(chat_id, f"🔍 *Consultando DNS para `{domain}`...*")
 
     def dig(tipo):
-        return run(f"dig +noall +answer +ttl {domain} {tipo} 2>/dev/null").strip()
+        return run_args(["dig", "+noall", "+answer", "+ttl", domain, tipo]).strip()
 
     a     = dig("A")
     aaaa  = dig("AAAA")
@@ -570,7 +581,7 @@ def cb_logs(chat_id, tipo):
         "dmesg":  (None,                "💻 Dmesg"),
     }
     path, label = opcoes.get(tipo, (None, "Log"))
-    out = run("dmesg | tail -30") if tipo == "dmesg" else run(f"tail -30 {path} 2>/dev/null || echo 'Arquivo não encontrado'")
+    out = run("dmesg | tail -30") if tipo == "dmesg" else (run_args(["tail", "-30", path]) or "Arquivo não encontrado")
     if len(out) > 3500:
         out = out[-3500:]
     send(chat_id, f"📜 *{label}*\n📅 {now()}\n\n```\n{out or 'Sem dados'}\n```")
@@ -609,7 +620,7 @@ def cmd_fail2ban(chat_id):
     lines        = [f"🔒 *Relatório Fail2Ban*\n📅 {now()}\n"]
     total_banned = 0
     for jail in jails:
-        out    = run(f"fail2ban-client status {jail}")
+        out    = run_args(["fail2ban-client", "status", jail])
         failed = re.search(r"Currently failed:\s+(\d+)", out)
         banned = re.search(r"Currently banned:\s+(\d+)", out)
         t_fail = re.search(r"Total failed:\s+(\d+)", out)
@@ -636,7 +647,7 @@ def cmd_banned(chat_id):
     lines      = [f"🚫 *IPs Banidos Agora*\n📅 {now()}\n"]
     any_banned = False
     for jail in jails:
-        out   = run(f"fail2ban-client status {jail}")
+        out   = run_args(["fail2ban-client", "status", jail])
         match = re.search(r"Banned IP list:\s+(.*)", out)
         if match:
             ips = match.group(1).strip().split()
@@ -659,7 +670,7 @@ def cmd_unban(chat_id, ip):
     jails    = get_active_jails()
     unbanned = []
     for jail in jails:
-        result = run(f"fail2ban-client set {jail} unbanip {ip} 2>&1")
+        result = run_args(["fail2ban-client", "set", jail, "unbanip", ip])
         if "1" in result or "unbanned" in result.lower():
             unbanned.append(jail)
     if unbanned:
@@ -744,7 +755,7 @@ def cb_fw_enable(chat_id):
     run("ufw --force reset")
     run("ufw default deny incoming")
     run("ufw default allow outgoing")
-    run(f"ufw allow {SSH_PORT}/tcp comment 'SSH protegido'")
+    run_args(["ufw", "allow", f"{SSH_PORT}/tcp", "comment", "SSH protegido"])
     run("ufw --force enable")
     logging.info(f"Firewall ativado por {chat_id}")
     send(chat_id,
@@ -796,11 +807,11 @@ def handle_port_input(chat_id, text):
         return
 
     if action == "open":
-        run(f"ufw allow {port}/{proto}")
+        run_args(["ufw", "allow", f"{port}/{proto}"])
         send(chat_id, f"✅ Porta `{port}/{proto}` *aberta* no firewall.")
         logging.info(f"Firewall: porta {port}/{proto} aberta por {chat_id}")
     else:
-        run(f"ufw delete allow {port}/{proto}")
+        run_args(["ufw", "delete", "allow", f"{port}/{proto}"])
         send(chat_id, f"✅ Porta `{port}/{proto}` *fechada* no firewall.")
         logging.info(f"Firewall: porta {port}/{proto} fechada por {chat_id}")
 
@@ -965,13 +976,13 @@ def _run_atualizar_bot(chat_id):
     repo_dir = cfg.get("repo_dir", "/opt/woncloud-bot")
     try:
         send(chat_id, "⏳ *Atualizando repositório...*")
-        r1 = subprocess.run(f"cd {repo_dir} && git pull",
-                            shell=True, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        r1 = subprocess.run(["git", "-C", repo_dir, "pull"],
+                            capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
 
         if "Already up to date" in r1.stdout or r1.returncode == 0:
             send(chat_id, "⏳ *Instalando atualização...*")
-            r2 = subprocess.run(f"cd {repo_dir} && sudo -n bash install.sh --no-restart",
-                                shell=True, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
+            r2 = subprocess.run(["sudo", "-n", "bash", "install.sh", "--no-restart"],
+                                cwd=repo_dir, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
 
             if r2.returncode == 0:
                 send(chat_id, "✅ *Bot atualizado com sucesso!*\n\n🔄 O serviço será reiniciado em 3 segundos...")
