@@ -338,6 +338,9 @@ def cmd_start(chat_id, user, args=None):
         AUTHORIZED_CHAT_ID = chat_id
         PAIR_CODE = None
         logging.info(f"Chat ID pareado: {chat_id}")
+        send(chat_id, "✅ *Pareado com sucesso!*\n\n"
+                      "Este chat agora é o dono do bot.\n"
+                      "Use /menu para ver os comandos.")
 
     name = user.get("first_name", "Admin")
     buttons = [
